@@ -1,3 +1,4 @@
+// ♡︎ 𝗦𝗵𝗔𝗻 ♡︎
 // @ts-nocheck
 /* eslint-disable no-undef */
 
@@ -2357,16 +2358,14 @@ function formatTyp(event) {
  * @param {{ threadKey: { otherUserFbId: any; threadFbId: any; }; actorFbId: any; actionTimestampMs: any; }} delta
  */
 
-// function formatDeltaReadReceipt(delta) {
-//     // otherUserFbId seems to be used as both the readerID and the threadID in a 1-1 chat.
-//     // In a group chat actorFbId is used for the reader and threadFbId for the thread.
-//     return {
-//         reader: (delta.threadKey.otherUserFbId || delta.actorFbId).toString(),
-//         time: delta.actionTimestampMs,
-//         threadID: formatID((delta.threadKey.otherUserFbId || delta.threadKey.threadFbId).toString()),
-//         type: "read_receipt"
-//     };
-// }
+function formatDeltaReadReceipt(delta) {
+    return {
+        reader: (delta.threadKey.otherUserFbId || delta.actorFbId).toString(),
+        time: delta.actionTimestampMs,
+        threadID: formatID((delta.threadKey.otherUserFbId || delta.threadKey.threadFbId).toString()),
+        type: "read_receipt"
+    };
+}
 
 /**
  * @param {{ reader: { toString: () => any; }; time: any; thread_fbid: any; }} event
@@ -2688,7 +2687,15 @@ var NUM_TO_MONTH = [
     "Nov",
     "Dec"
 ];
-var NUM_TO_DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+var NUM_TO_DAY = [
+    "Sun",
+    "Mon", 
+    "Tue", 
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat"
+];
 
 /**
  * @param {{ getUTCDate: () => any; getUTCHours: () => any; getUTCMinutes: () => any; getUTCSeconds: () => any; getUTCDay: () => string | number; getUTCMonth: () => string | number; getUTCFullYear: () => string; }} date
@@ -3003,7 +3010,7 @@ module.exports = {
     formatProxyPresence,
     formatPresence,
     formatTyp,
-    // formatDeltaReadReceipt,
+    formatDeltaReadReceipt,
     formatCookie,
     formatThread,
     formatReadReceipt,
