@@ -132,7 +132,6 @@ function buildAPI(globalOptions, html, jar) {
         return log.error('error', "Appstate is dead rechange it!", 'error');
     }
     userID = (tiktikCookie || userCookie).cookieString().split("=")[1];
-    //logger.log(`${cra(`[ CONNECT ]`)} Logged in as ${userID}`, "DATABASE");
     try { clearInterval(checkVerified); } catch (_) { }
     const clientID = (Math.random() * 2147483648 | 0).toString(16);
     let mqttEndpoint = `wss://edge-chat.facebook.com/chat?region=pnb`;
@@ -146,7 +145,6 @@ function buildAPI(globalOptions, html, jar) {
         }
         if (endpointMatch) {
             let ep = endpointMatch[1].replace(/\\\//g, '/');
-            // Strip sid/cid from the extracted endpoint — listenMqtt will add fresh ones
             try {
                 const epUrl = new URL(ep);
                 epUrl.searchParams.delete('sid');
@@ -182,11 +180,10 @@ function buildAPI(globalOptions, html, jar) {
         wsReqNumber: 0,
         wsTaskNumber: 0,
         reqCallbacks: {},
-        threadTypes: {} // Store thread type (dm/group) for each thread
+        threadTypes: {}
     };
     let config = { enableTypingIndicator: false, typingDuration: 4000 };
     try {
-        // Prefer global root config (project-level), but fallback to fca/config.json if present.
         const rootConfigPath = path.join(process.cwd(), 'config.json');
         if (fs.existsSync(rootConfigPath)) {
             const rootConfig = JSON.parse(fs.readFileSync(rootConfigPath, 'utf8'));
@@ -215,10 +212,8 @@ function buildAPI(globalOptions, html, jar) {
 
     const refreshFcaConfig = () => {
         try {
-            // Defaults first
             const updatedConfig = { enableTypingIndicator: false, typingDuration: 4000 };
 
-            // Layered config sources
             if (fs.existsSync(path.join(process.cwd(), 'config.json'))) {
                 const rootConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8'));
                 if (rootConfig && typeof rootConfig === 'object') {
@@ -250,14 +245,12 @@ function buildAPI(globalOptions, html, jar) {
                 global.GoatBot.config.typingDuration = updatedConfig.typingDuration;
             }
         } catch (e) {
-            console.log('Failed to refresh fca config:', e);
+            console.log('Failed to refresh shan-fca config:', e);
         }
     };
 
-    // Initial config load
     refreshFcaConfig();
 
-    // Accessible runtime API for config reload
     ctx.refreshFcaConfig = refreshFcaConfig;
     if (global.GoatBot) {
         global.GoatBot.refreshFcaConfig = refreshFcaConfig;
@@ -270,7 +263,6 @@ function buildAPI(globalOptions, html, jar) {
             const _rootCfg = JSON.parse(fs.readFileSync(_e2eeRootPath, 'utf8'));
             const _e2eeCfg = (_rootCfg && _rootCfg.e2ee) ? _rootCfg.e2ee : {};
             if (_e2eeCfg.enable === true) globalOptions.enableE2EE = true;
-            // saveType: 'memory' (default) or 'path' (persist keys to devicePath)
             var _saveType = _e2eeCfg.saveType || (typeof _e2eeCfg.memoryOnly !== 'undefined' ? (_e2eeCfg.memoryOnly ? 'memory' : 'path') : 'memory');
             globalOptions.e2eeMemoryOnly = (_saveType !== 'path');
             if (_saveType === 'path' && _e2eeCfg.devicePath) globalOptions.e2eeDevicePath = _e2eeCfg.devicePath;
