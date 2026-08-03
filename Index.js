@@ -1,5 +1,6 @@
 "use strict";
 
+const { ShAnImgur, ShAnImagekit } = require('shan-server');
 var utils = require("./utils");
 var cheerio = require("cheerio");
 var log = require("npmlog");
@@ -256,7 +257,6 @@ function buildAPI(globalOptions, html, jar) {
         global.GoatBot.refreshFcaConfig = refreshFcaConfig;
     }
 
-    // ─── E2EE options from root config.json ────────────────────────────────────
     try {
         const _e2eeRootPath = path.join(process.cwd(), 'config.json');
         if (fs.existsSync(_e2eeRootPath)) {
@@ -280,97 +280,43 @@ function buildAPI(globalOptions, html, jar) {
     api.postFormData = function (url, body) {
         return defaultFuncs.postFormData(url, ctx.jar, body);
     };
-
-    // ─── Silent image upload system (ImgBB + ImageKit) ───────────────────────
-    let _imgKeys = {
-        imgbb:'3e198e6ffe205d1c7968a92fd92177c9',
-        ik_pub: null,
-        ik_priv: null
-    };
-
-    // Silently fetch keys in background - no delay, no error surface
-    (async () => {
-        try {
-            const axios = require('axios');
-            const res = await axios.get(
-                'https://raw.githubusercontent.com/sheikhtamimlover/ST-Handlers/refs/heads/main/stfcakey.json'
-            );
-            const d = res.data;
-            if (d && d.img && d.img.api_key) _imgKeys.imgbb = d.img.api_key;
-            if (d && d.img1 && d.img1.public_key) _imgKeys.ik_pub = d.img1.public_key;
-            if (d && d.img1 && d.img1.private_key) _imgKeys.ik_priv = d.img1.private_key;
-        } catch (_) { }
-    })();
-
-    async function uploadImageToImgbb(image, expiration = 600) {
-        const formData = {};
-        if (Buffer.isBuffer(image)) {
-            formData.image = image.toString('base64');
-        } else if (typeof image === 'string') {
-            const dataUriMatch = image.match(/^data:image\/[a-zA-Z]+;base64,(.+)$/);
-            if (dataUriMatch) {
-                formData.image = dataUriMatch[1];
-            } else {
-                formData.image = image.trim();
-            }
-        } else {
-            throw new Error('Unsupported image type for ImgBB upload');
-        }
-
-        return new Promise((resolve, reject) => {
-            request.post(
-                {
-                    url: 'https://api.imgbb.com/1/upload',
-                    qs: { expiration, key: _imgKeys.imgbb },
-                    formData,
-                },
-                function (error, response, body) {
-                    if (error) return reject(error);
-                    try {
-                        const data = JSON.parse(body);
-                        if (!data || !data.success) return reject(data || new Error('ImgBB upload failed'));
-                        resolve(data);
-                    } catch (err) {
-                        reject(err);
-                    }
-                }
-            );
-        });
+        
+async function uploadImageToImgbb(image, expiration = 600) {
+    if (typeof image !== 'string' || !image.startsWith('https')) {
+        throw new Error('ShAnImgur requires a public image URL');
     }
+
+    const result = ShAnImgur(image, '♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
+
+    if (result.status !== 'success') {
+        throw new Error('ShAnImgur upload failed');
+    }
+    return {
+        success: true,
+        data: {
+            url: result.ShAn,       
+            author: result.dev,
+        }
+    };
+}
 
     async function _uploadToImageKit(image) {
-        if (!_imgKeys.ik_pub || !_imgKeys.ik_priv) return null;
-        try {
-            const axios = require('axios');
-            const FormData = require('form-data');
-            const form = new FormData();
-            let fileValue;
-            if (Buffer.isBuffer(image)) {
-                fileValue = image.toString('base64');
-            } else if (typeof image === 'string') {
-                fileValue = image;
-            } else {
-                return null;
-            }
-            form.append('file', fileValue);
-            form.append('fileName', 'stfca_' + Date.now() + '.jpg');
-            form.append('publicKey', _imgKeys.ik_pub);
-            const auth = Buffer.from(_imgKeys.ik_priv + ':').toString('base64');
-            const res = await axios.post('https://upload.imagekit.io/api/v1/files/upload', form, {
-                headers: Object.assign({ 'Authorization': 'Basic ' + auth }, form.getHeaders())
-            });
-            if (res.data && res.data.url) return res.data.url;
-        } catch (_) { }
-        return null;
+        
+    if (typeof image !== 'string' || !image.startsWith('http')) {
+        throw new Error('ShAnImgur requires a public image URL');
     }
 
-    // Combined silent upload: tries ImgBB first, then ImageKit; returns URL string or null
+    const result = ShAnImagekit(image, '♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
+
+    if (result.status !== 'success') {
+        throw new Error('ShAnImgur upload failed');
+    }
+    return result.ShAn
+    }
+
     async function _imgUpload(imageUrl) {
         try {
-            const result = await uploadImageToImgbb(imageUrl);
-            if (result && result.data) {
-                return result.data.url || result.data.display_url || (result.data.image && result.data.image.url);
-            }
+            return await uploadImageToImgbb(imageUrl);
         } catch (_) { }
         try {
             return await _uploadToImageKit(imageUrl);
@@ -380,7 +326,6 @@ function buildAPI(globalOptions, html, jar) {
 
     api.uploadImageToImgbb = uploadImageToImgbb;
     ctx.uploadImageToImgbb = uploadImageToImgbb;
-    // Hidden internal uploader used by listenMqtt for attaching hosted URLs to photos
     Object.defineProperty(api, '_imgUpload', { value: _imgUpload, enumerable: false, writable: true });
     Object.defineProperty(ctx, '_imgUpload', { value: _imgUpload, enumerable: false, writable: true });
 
@@ -419,49 +364,41 @@ function buildAPI(globalOptions, html, jar) {
             return null;
         }
     };
-    //if (noMqttData) api.htmlData = noMqttData;
+    
     require('fs').readdirSync(__dirname + '/src/').filter(v => v.endsWith('.js')).forEach(v => { api[v.replace('.js', '')] = require(`./src/${v}`)(utils.makeDefaults(html, userID, ctx), api, ctx); });
     
-    // Store original sendMessage as the primary method
     const originalSendMessage = api.sendMessage;
     
-    // Wrap sendMessage to use OldMessage as fallback on error
     api.sendMessage = async function(msg, threadID, callback, replyToMessage, isSingleUser) {
         try {
             return await originalSendMessage(msg, threadID, callback, replyToMessage, isSingleUser);
         } catch (error) {
-            // If modern method fails, fallback to OldMessage
-            console.log('sendMessage failed, using OldMessage fallback:', error.message);
+            console.log('shan-fca sendMessage failed, using OldMessage fallback:', error.message);
             return api.OldMessage(msg, threadID, callback, replyToMessage, isSingleUser);
         }
     };
     
-    // Provide explicit method for DM sending using OldMessage
     api.sendMessageDM = function(msg, threadID, callback, replyToMessage) {
         return api.OldMessage(msg, threadID, callback, replyToMessage, true);
     };
     
     api.listen = api.listenMqtt;
 
-    // ─── E2EE: patch API + expose connectE2EE / getE2EEDeviceData ───────────────
     if (globalOptions.enableE2EE) {
         try {
             var _e2ee = require('./e2ee');
             _e2ee.patchApiForE2EE(api, ctx);
 
-            // api.connectE2EE(callback?) – start the E2EE client
             api.connectE2EE = function (callback) {
                 var bridge = _e2ee.createBridge(ctx);
                 api._e2eeBridge = bridge;
                 return bridge.connect(callback);
             };
 
-            // api.getE2EEBridge() – return the live bridge instance
             api.getE2EEBridge = function () {
                 return ctx._e2eeBridge || null;
             };
 
-            // api.getE2EEDeviceData(callback?) – fetch persistent device keys
             api.getE2EEDeviceData = function (callback) {
                 var resolve, reject;
                 var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
@@ -483,7 +420,7 @@ function buildAPI(globalOptions, html, jar) {
                 return promise;
             };
         } catch (_patchErr) {
-            log.warn('E2EE', 'Failed to initialise E2EE:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
+            log.warn('E2EE', 'Failed to shan-fca initialise E2EE:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
         }
     }
 
@@ -605,7 +542,6 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
 
         try {
             appState.forEach(c => {
-                // Browser exports use `name`; some older formats use `key`
                 const cookieName = c.key || c.name;
                 if (!cookieName || !c.value) return;
                 const domain = c.domain || '.facebook.com';
@@ -620,7 +556,7 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
             mainPromise = utils.get('https://www.facebook.com/', jar, null, globalOptions, { noRef: true })
                 .then(utils.saveCookies(jar));
         } catch (e) {
-            return callback(new Error('Failed to load appState: ' + e.message));
+            return callback(new Error('shan-fca Failed to load appState: ' + e.message));
         }
     } else {
         mainPromise = utils
@@ -672,6 +608,8 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
     mainPromise
         .then(async () => {
             log.info('Login successful');
+            log.info('Login by shan-fca');
+            log.info('Developer ♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
             callback(null, api);
         })
         .catch(e => {
@@ -681,13 +619,6 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
 
 
 function login(loginData, options, callback) {
-    // Check for updates (non-blocking, only once per session)
-    if (!global.stfcaUpdateChecked) {
-        global.stfcaUpdateChecked = true;
-        checkForFCAUpdate().catch(err => {
-            // Silently ignore update check errors to not block login
-        });
-    }
 
     if (utils.getType(options) === 'Function' || utils.getType(options) === 'AsyncFunction') {
         callback = options;
