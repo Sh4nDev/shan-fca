@@ -236,11 +236,11 @@ function createBridge(ctx) {
     var mod;
     try { mod = await _getDynamicImport()(_E2EE_LIB_URL); }
     catch (err) {
-      throw new Error("Cannot load shan-fca E2EE bundle (" + _E2EE_LIB_URL + "): " +
+      throw new Error("𝐂𝐚𝐧𝐧𝐨𝐭 𝐥𝐨𝐚𝐝 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 (" + _E2EE_LIB_URL + "): " +
         (err && err.message ? err.message : String(err)));
     }
     if (!mod || !mod.Client)
-      throw new Error("shan-fca E2EE bundle loaded but Client export not found");
+      throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 𝐥𝐨𝐚𝐝𝐞𝐝 𝐛𝐮𝐭 𝐜𝐥𝐢𝐞𝐧𝐭 𝐞𝐱𝐩𝐨𝐫𝐭 𝐧𝐨𝐭 𝐟𝐨𝐮𝐧𝐝.");
     return mod.Client;
   }
 
@@ -285,17 +285,17 @@ function createBridge(ctx) {
     state.client.on("error", function (err) {
       var msg = err && err.message ? err.message : String(err || "");
       if (/close 1006|unexpected EOF|ECONNRESET|ETIMEDOUT|read loop/i.test(msg)) {
-        log.warn("e2ee", "shan-fca Transient network error — will reconnect:", msg); return;
+        log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐭𝐫𝐚𝐧𝐬𝐢𝐞𝐧𝐭 𝐧𝐞𝐭𝐰𝐨𝐨𝐫𝐤 𝐞𝐫𝐫𝐨𝐫 — 𝐰𝐞𝐥𝐥𝐥 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭:", msg); return;
       }
-      _callUserCallback(state.lastGlobalCallback, err || new Error("Unknown E2EE error"));
+      _callUserCallback(state.lastGlobalCallback, err || new Error("𝐔𝐧𝐤𝐧𝐨𝐧 𝐄2𝐄𝐄 𝐞𝐫𝐫𝐨𝐞"));
     });
     state.client.on("disconnected", function (info) {
       state.connected = false; state.fullyReady = false;
-      log.warn("e2ee", "shan-fca E2EE disconnected — reconnecting in 5s");
+      log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐝𝐢𝐬𝐜𝐨𝐧𝐧𝐞𝐜𝐭𝐞𝐝 — 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭𝐢𝐝𝐢𝐧𝐠 𝐢𝐧 5𝐬..");
       setTimeout(function () {
         if (!state.connectingPromise) {
           var cb = (ctx && ctx._globalCallback) || state.lastGlobalCallback;
-          connect(cb).catch(function (e) { log.error("e2ee", "shan-fca Reconnect failed:", e && e.message ? e.message : e); });
+          connect(cb).catch(function (e) { log.error("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭 𝐟𝐚𝐢𝐥𝒆𝐝:", e && e.message ? e.message : e); });
         }
       }, 5000);
       _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_disconnected", isE2EE: true, data: info || null });
