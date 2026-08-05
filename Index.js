@@ -55,7 +55,7 @@ function setOptions(globalOptions, options) {
                         break;
                     }
                     default: {
-                        log.warn("setOptions", "Unrecognized option given to setOptions: " + key);
+                        log.warn("setOptions", " 𝐔𝐧𝐫𝐞𝐜𝐨𝐠𝐧𝐢𝐳𝐞𝐝 𝐨𝐩𝐭𝐢𝐨𝐧 𝐠𝐢𝐯𝐞𝐧 𝐭𝐨 𝐬𝐞𝐭𝐎𝐩𝐭𝐢𝐨𝐧𝐬: " + key);
                         break;
                     }
                 }
@@ -115,10 +115,10 @@ function buildAPI(globalOptions, html, jar) {
                 }
             } catch { }
             if (fb_dtsg) {
-                console.log("Found fb_dtsg!");
+                console.log("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐟𝐨𝐮𝐧𝐝 𝐟𝐛_𝐝𝐭𝐬𝐠!");
             }
         } catch (e) {
-            console.log("Error finding fb_dtsg:", e);
+            console.log("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐞𝐫𝐫𝐨𝐫 𝐟𝐢𝐧𝐝𝐢𝐧𝐠 𝐟𝐛_𝐝𝐭𝐬𝐠:", e);
         }
     }
     extractFromHTML();
@@ -127,10 +127,10 @@ function buildAPI(globalOptions, html, jar) {
     var userCookie = cookies.find(cookie => cookie.cookieString().startsWith("c_user="));
     var tiktikCookie = cookies.find(cookie => cookie.cookieString().startsWith("i_user="));
     if (!userCookie && !tiktikCookie) {
-        return log.error("Error! Your cookiestate is not valid!");
+        return log.error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐞𝐫𝐫𝐨𝐫! 𝐲𝐨𝐮𝐫 𝐜𝐨𝐨𝐤𝐢𝐞𝐬𝐭𝐬𝐭𝐞 𝐢𝐬 𝐧𝐨𝐭 𝐯𝐚𝐥𝐢𝐝! 𝐞𝐫𝐫𝐨𝐫!");
     }
     if (html.includes("/checkpoint/block/?next")) {
-        return log.error('error', "Appstate is dead rechange it!", 'error');
+        return log.error('error', "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐲𝐨𝐮𝐫 𝐚𝐩𝐩𝐬𝐭𝐬𝐭𝐞 𝐢𝐬 𝐝𝐞𝐚𝐭 𝐫𝐞𝐜𝐡𝐚𝐧𝐠𝐞 𝐢𝐭!", 'error');
     }
     userID = (tiktikCookie || userCookie).cookieString().split("=")[1];
     try { clearInterval(checkVerified); } catch (_) { }
@@ -141,7 +141,7 @@ function buildAPI(globalOptions, html, jar) {
     try {
         const endpointMatch = html.match(/"endpoint":"([^"]+)"/);
         if (endpointMatch && endpointMatch.input && endpointMatch.input.includes("601051028565049")) {
-          console.log(`login error.`);
+          console.log(`𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐥𝐨𝐠𝐢𝐧 𝐞𝐫𝐫𝐨𝐫.`);
           ditconmemay = true;
         }
         if (endpointMatch) {
@@ -158,9 +158,10 @@ function buildAPI(globalOptions, html, jar) {
             }
         }
     } catch (e) {
-        console.log('Using default MQTT endpoint');
+        console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐮𝐬𝐢𝐧𝐠 𝐝𝐞𝐟𝐚𝐮𝐥𝐭 𝐌𝐐𝐓𝐓 𝐞𝐧𝐝𝐩𝐨𝐢𝐧𝐭..');
     }
     log.info('Logging in...');
+    
     var ctx = {
         userID: userID,
         jar: jar,
