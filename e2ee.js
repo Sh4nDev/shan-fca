@@ -313,7 +313,7 @@ function createBridge(ctx) {
       if (!state.client) {
         var cookies = _cookiesFromJar(ctx);
         if (!cookies.c_user || !cookies.xs)
-          throw new Error("shan-fca cannot start E2EE: c_user/xs cookies missing");
+          throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐚𝐧𝐧𝐨𝐭 𝐬𝐭𝐚𝐫𝐭 𝐄2𝐄𝐄: c_user/xs cookies missing");
 
         var opts = {
           enableE2EE: true,
@@ -419,7 +419,7 @@ function createBridge(ctx) {
         case "sticker":
           return client.sendE2EESticker(jid, buf, o.mimeType || "image/webp",
             { replyToId: o.replyToId, replyToSenderJid: o.replyToSenderJid });
-        default: throw new Error("Unsupported E2EE mediaType: " + ntype);
+        default: throw new Error("𝐔𝐧𝐬𝐮𝐩𝐩𝐨𝐫𝐭𝐞𝐝 𝐄2𝐄𝐄 𝐦𝐞𝐝𝐢𝐚𝐓𝐲𝐩𝐞: " + ntype);
       }
     }
   };
@@ -428,10 +428,6 @@ function createBridge(ctx) {
   return bridge;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// § 4  PATCH API  –  wraps existing api methods to auto-route E2EE JIDs
-//     Call patchApiForE2EE(api, ctx) once after buildAPI() when E2EE enabled.
-// ─────────────────────────────────────────────────────────────────────────────
 global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
 global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
 
@@ -486,18 +482,12 @@ function _streamToBuffer(r) {
 }
 
 function patchApiForE2EE(api, ctx) {
-  // Routing for sendMessage/editMessage/setMessageReaction/unsendMessage is
-  // integrated directly inside each fca/src/*.js file.
-  // patchApiForE2EE adds the shared helper methods onto the api object.
-
-  // downloadE2EEMedia helper
   if (typeof api.downloadE2EEMedia !== "function") {
     api.downloadE2EEMedia = function (options) {
       return createBridge(ctx).downloadMedia(options);
     };
   }
 
-  // resolveE2EEAttachment – download encrypted attachment, return local URL
   if (typeof api.resolveE2EEAttachment !== "function") {
     api.resolveE2EEAttachment = async function (att) {
       if (!att || !att.isE2EE) return att;
@@ -519,7 +509,6 @@ function patchApiForE2EE(api, ctx) {
     };
   }
 
-  // sendTypingE2EE
   if (typeof api.sendTypingE2EE !== "function") {
     api.sendTypingE2EE = function (chatJid, isTyping) {
       if (!isE2EEChatJid(chatJid)) return Promise.resolve();
@@ -528,9 +517,6 @@ function patchApiForE2EE(api, ctx) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Exports
-// ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   isE2EEChatJid  : isE2EEChatJid,
   storeMedia     : storeMedia,
