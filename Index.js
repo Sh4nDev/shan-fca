@@ -160,7 +160,8 @@ function buildAPI(globalOptions, html, jar) {
     } catch (e) {
         console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐮𝐬𝐢𝐧𝐠 𝐝𝐞𝐟𝐚𝐮𝐥𝐭 𝐌𝐐𝐓𝐓 𝐞𝐧𝐝𝐩𝐨𝐢𝐧𝐭..');
     }
-    log.info('Logging in...');
+    log.info('𝐋𝐨𝐠𝐠𝐢𝐧𝐠 𝐢𝐧 𝐰𝐢𝐭𝐡 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚...');
+    log.info('𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫 ♡︎ 𝗦𝗵𝗔𝗻 ♡︎...');
     
     var ctx = {
         userID: userID,
@@ -209,7 +210,7 @@ function buildAPI(globalOptions, html, jar) {
             if (typeof global.GoatBot.config.typingDuration !== 'undefined') config.typingDuration = global.GoatBot.config.typingDuration;
         }
     } catch (e) {
-        console.log('Error loading config.json:', e);
+        console.log('𝐄𝐫𝐫𝐨𝐫 𝐥𝐨𝐚𝐝𝐢𝐧𝐠 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐨𝐧𝐟𝐢𝐠.𝐣𝐬𝐨𝐧:', e);
     }
 
     const refreshFcaConfig = () => {
@@ -247,7 +248,7 @@ function buildAPI(globalOptions, html, jar) {
                 global.GoatBot.config.typingDuration = updatedConfig.typingDuration;
             }
         } catch (e) {
-            console.log('Failed to refresh shan-fca config:', e);
+            console.log('𝐅𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐫𝐞𝐟𝐫𝐞𝐬𝐡 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐨𝐧𝐟𝐢𝐠:', e);
         }
     };
 
@@ -284,13 +285,13 @@ function buildAPI(globalOptions, html, jar) {
         
 async function uploadImageToImgbb(image, expiration = 600) {
     if (typeof image !== 'string' || !image.startsWith('https')) {
-        throw new Error('ShAnImgur requires a public image URL');
+        throw new Error('𝐒𝐡𝐀𝐧𝐈𝐦𝐠𝐮𝐫 𝐫𝐞𝐪𝐮𝐢𝐫𝐞𝐝 𝐚 𝐩𝐮𝐛𝐥𝐢𝐜 𝐢𝐦𝐚𝐠𝐞 𝐔𝐑𝐋');
     }
 
     const result = ShAnImgur(image, '♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
 
     if (result.status !== 'success') {
-        throw new Error('ShAnImgur upload failed');
+        throw new Error('𝐒𝐡𝐀𝐧𝐈𝐦𝐠𝐮𝐫 𝐮𝐩𝐥𝐨𝐚𝐝 𝐟𝐚𝐢𝐥𝐞𝐝');
     }
     return {
         success: true,
@@ -304,13 +305,13 @@ async function uploadImageToImgbb(image, expiration = 600) {
     async function _uploadToImageKit(image) {
         
     if (typeof image !== 'string' || !image.startsWith('http')) {
-        throw new Error('ShAnImgur requires a public image URL');
+        throw new Error('𝐒𝐡𝐀𝐧𝐈𝐦𝐠𝐤𝐢𝐭 𝐫𝐞𝐪𝐮𝐢𝐫𝐞 𝐚 𝐩𝐮𝐛𝐥𝐢𝐜 𝐢𝐦𝐚𝐠𝐞 𝐔𝐑𝐋');
     }
 
-    const result = ShAnImagekit(image, '♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
+    const result = ShAnImgkit(image, '♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
 
     if (result.status !== 'success') {
-        throw new Error('ShAnImgur upload failed');
+        throw new Error('𝐒𝐡𝐀𝐧𝐈𝐦𝐠𝐤𝐢𝐭 𝐮𝐩𝐥𝐨𝐚𝐝 𝐟𝐚𝐢𝐥𝐞𝐝');
     }
     return result.ShAn
     }
@@ -361,7 +362,7 @@ async function uploadImageToImgbb(image, expiration = 600) {
 
             return newDtsg;
         } catch (e) {
-            console.log("Error getting fresh dtsg:", e);
+            console.log("𝐄𝐫𝐫𝐨𝐫 𝐠𝐞𝐭𝐭𝐢𝐧𝐠 𝐟𝐫𝐞𝐬𝐡 𝐝𝐭𝐬𝐠:", e);
             return null;
         }
     };
@@ -374,7 +375,7 @@ async function uploadImageToImgbb(image, expiration = 600) {
         try {
             return await originalSendMessage(msg, threadID, callback, replyToMessage, isSingleUser);
         } catch (error) {
-            console.log('shan-fca sendMessage failed, using OldMessage fallback:', error.message);
+            console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐬𝐞𝐧𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐢𝐥𝐞𝐝, 𝐮𝐬𝐢𝐧𝐠 𝐎𝐥𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐥𝐥𝐛𝐚𝐜𝐤:', error.message);
             return api.OldMessage(msg, threadID, callback, replyToMessage, isSingleUser);
         }
     };
@@ -421,7 +422,7 @@ async function uploadImageToImgbb(image, expiration = 600) {
                 return promise;
             };
         } catch (_patchErr) {
-            log.warn('E2EE', 'Failed to shan-fca initialise E2EE:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
+            log.warn('E2EE', '𝐅𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐢𝐧𝐢𝐭𝐢𝐚𝐥𝐢𝐬𝐞 𝐄2𝐄𝐄:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
         }
     }
 
@@ -537,7 +538,7 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
             try {
                 appState = appState;
             } catch (e) {
-                return callback(new Error("Failed to parse appState"));
+                return callback(new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐟𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐩𝐚𝐫𝐬𝐞 𝐚𝐩𝐩𝐒𝐭𝐚𝐭𝐞..."));
             }
         }
 
@@ -557,7 +558,7 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
             mainPromise = utils.get('https://www.facebook.com/', jar, null, globalOptions, { noRef: true })
                 .then(utils.saveCookies(jar));
         } catch (e) {
-            return callback(new Error('shan-fca Failed to load appState: ' + e.message));
+            return callback(new Error('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐟𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐥𝐨𝐚𝐝 𝐚𝐩𝐩𝐒𝐭𝐚𝐭𝐞: ' + e.message));
         }
     } else {
         mainPromise = utils
@@ -608,9 +609,9 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
 
     mainPromise
         .then(async () => {
-            log.info('Login successful');
-            log.info('Login by shan-fca');
-            log.info('Developer ♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
+            log.info('𝐋𝐨𝐠𝐢𝐧 𝐬𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥...');
+            log.info('𝐋𝐨𝐠𝐢𝐧 𝐰𝐢𝐭𝐡 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚...');
+            log.info('𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐚𝐫 ♡︎ 𝗦𝗵𝗔𝗻 ♡︎');
             callback(null, api);
         })
         .catch(e => {
