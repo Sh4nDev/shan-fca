@@ -1,6 +1,6 @@
 "use strict";
 
-const { ShAnImgur, ShAnImagekit } = require('shan-server');
+const { ShAnImgur, ShAnImgkit } = require('shan-server');
 var utils = require("./utils");
 var cheerio = require("cheerio");
 var log = require("npmlog");
