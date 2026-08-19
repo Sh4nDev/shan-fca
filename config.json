@@ -1,0 +1,17 @@
+{
+  "e2ee": {
+    "enable": true,
+    "memoryOnly": true,
+    "autoReconnect": true,
+    "logLevel": "none",
+    "devicePath": null
+  },
+  "enableTypingIndicator": true,
+  "typingDuration": 2000,
+  "listenEvents": true,
+  "autoMarkRead": true,
+  "autoMarkDelivery": false,
+  "selfListen": false,
+  "online": true,
+  "logLevel": "silent"
+}
