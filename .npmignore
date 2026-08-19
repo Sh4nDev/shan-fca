@@ -1,0 +1,8 @@
+node_modules
+.replit
+replit.nix
+.gitignore
+li.js
+package-lock.json
+.git
+*.log
