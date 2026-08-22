@@ -259,6 +259,7 @@ function buildAPI(globalOptions, html, jar) {
         global.GoatBot.refreshFcaConfig = refreshFcaConfig;
     }
 
+    // Load E2EE config
     try {
         const _e2eeRootPath = path.join(process.cwd(), 'config.json');
         if (fs.existsSync(_e2eeRootPath)) {
@@ -372,7 +373,43 @@ async function uploadImageToImgbb(image, expiration = 600) {
     
     api.sendMessage = async function(msg, threadID, callback, replyToMessage, isSingleUser) {
         try {
+            const _e2eeMod = require('./e2ee');
+            let e2eeJid = null;
+            
+            // Check if threadID is already an E2EE JID (contains @)
+            if (_e2eeMod.isE2EEChatJid(String(threadID))) {
+                e2eeJid = String(threadID);
+            }
+            // Check if numeric threadID has E2EE JID mapping
+            else if (global._e2eeMessageMap) {
+                // Check for JID mapping
+                if (global._e2eeMessageMap.has(String(threadID) + "_jid")) {
+                    e2eeJid = global._e2eeMessageMap.get(String(threadID) + "_jid");
+                }
+                // Check if messageID maps to E2EE JID
+                else if (global._e2eeMessageMap.has(String(threadID))) {
+                    const mappedValue = global._e2eeMessageMap.get(String(threadID));
+                    if (mappedValue && _e2eeMod.isE2EEChatJid(mappedValue)) {
+                        e2eeJid = mappedValue;
+                    }
+                }
+            }
+            
+            // If E2EE detected, use E2EE send
+            if (e2eeJid && _e2eeMod.isE2EEChatJid(e2eeJid)) {
+                const messageText = typeof msg === 'object' ? (msg.body || msg.text || '') : msg;
+                const result = await _e2eeMod.createBridge(ctx).sendMessage(
+                    e2eeJid, 
+                    messageText,
+                    { replyToId: replyToMessage }
+                );
+                if (typeof callback === 'function') callback(null, result);
+                return result;
+            }
+            
+            // Otherwise use normal send
             return await originalSendMessage(msg, threadID, callback, replyToMessage, isSingleUser);
+            
         } catch (error) {
             console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐬𝐞𝐧𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐢𝐥𝐞𝐝, 𝐮𝐬𝐢𝐧𝐠 𝐎𝐥𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐥𝐥𝐛𝐚𝐜𝐤:', error.message);
             return api.OldMessage(msg, threadID, callback, replyToMessage, isSingleUser);
@@ -385,6 +422,7 @@ async function uploadImageToImgbb(image, expiration = 600) {
     
     api.listen = api.listenMqtt;
 
+    // Always initialize E2EE module for auto-detection
     try {
         var _e2ee = require('./e2ee');
         _e2ee.patchApiForE2EE(api, ctx);
