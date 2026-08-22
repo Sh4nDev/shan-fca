@@ -1,6 +1,5 @@
 {
   "e2ee": {
-    "enable": true,
     "memoryOnly": true,
     "autoReconnect": true,
     "logLevel": "none",
