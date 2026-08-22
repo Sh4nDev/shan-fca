@@ -132,10 +132,21 @@ function _numericId(jid) {
   return m ? m[1] : s;
 }
 
+// Extract numeric thread ID from E2EE JID for consistency with non-E2EE
+function _extractThreadID(jid) {
+  if (!jid) return "";
+  var s = String(jid);
+  // Handle E2EE JIDs like "1234567890@group.facebook.com" or "1234567890@facebook.com"
+  var m = s.match(/^(\d+)/);
+  if (m) return m[1];
+  // If no numeric prefix, return the original
+  return s;
+}
+
 function _mapMsg(ev) {
   var text = ev && ev.text ? String(ev.text) : "";
   var sid  = ev && ev.senderId != null ? _numericId(String(ev.senderId)) : "";
-  var tid  = ev && ev.chatJid  ? String(ev.chatJid)
+  var tid  = ev && ev.chatJid  ? _extractThreadID(ev.chatJid)
            : (ev && ev.threadId != null ? String(ev.threadId) : "");
   var messageReply = null;
   if (ev && ev.replyTo) {
@@ -152,7 +163,11 @@ function _mapMsg(ev) {
     };
   }
   return {
-    type: "e2ee_message", senderID: sid, body: text, threadID: tid,
+    // Use same type format as non-E2EE for compatibility
+    type: "message", 
+    senderID: sid, 
+    body: text, 
+    threadID: tid,
     messageID: ev.id != null ? String(ev.id) : ev.id,
     messageReply: messageReply,
     attachments: Array.isArray(ev.attachments) ? ev.attachments.map(_normalizeAtt) : [],
@@ -168,8 +183,11 @@ function _mapMsg(ev) {
 function _mapEdit(ev) {
   var text = ev && ev.text ? String(ev.text) : "";
   return {
-    type: "e2ee_message_edit", senderID: ev && ev.senderId != null ? String(ev.senderId) : "",
-    body: text, threadID: ev && ev.chatJid ? String(ev.chatJid) : "",
+    // Use same type format as non-E2EE
+    type: "message_edit", 
+    senderID: ev && ev.senderId != null ? _numericId(String(ev.senderId)) : "",
+    body: text, 
+    threadID: ev && ev.chatJid ? _extractThreadID(ev.chatJid) : "",
     messageID: ev ? ev.messageId : undefined,
     timestamp: ev && ev.timestampMs != null ? Number(ev.timestampMs) : Date.now(),
     isGroup: /@group\.facebook\.com$/i.test(ev && ev.chatJid ? ev.chatJid : ""),
@@ -181,11 +199,13 @@ function _mapEdit(ev) {
 
 function _mapReaction(ev) {
   return {
-    type: "e2ee_message_reaction",
-    threadID: ev && ev.chatJid ? String(ev.chatJid) : "",
-    messageID: ev ? ev.messageId : undefined, reaction: ev ? ev.reaction : undefined,
-    senderID: ev && ev.senderId != null ? String(ev.senderId) : undefined,
-    userID:   ev && ev.senderId != null ? String(ev.senderId) : undefined,
+    // Use same type format as non-E2EE
+    type: "message_reaction",
+    threadID: ev && ev.chatJid ? _extractThreadID(ev.chatJid) : "",
+    messageID: ev ? ev.messageId : undefined, 
+    reaction: ev ? ev.reaction : undefined,
+    senderID: ev && ev.senderId != null ? _numericId(String(ev.senderId)) : undefined,
+    userID:   ev && ev.senderId != null ? _numericId(String(ev.senderId)) : undefined,
     isE2EE: true,
     e2ee: { chatJid: ev ? ev.chatJid : undefined, senderJid: ev ? ev.senderJid : undefined }
   };
@@ -193,10 +213,14 @@ function _mapReaction(ev) {
 
 function _mapReceipt(ev) {
   return {
-    type: "e2ee_receipt", isE2EE: true,
+    // Keep same format but mark as E2EE
+    type: "receipt", 
+    isE2EE: true,
     e2ee: {
-      receiptType: ev ? ev.type : undefined, chatJid: ev ? ev.chat : undefined,
-      senderJid: ev ? ev.sender : undefined, messageIds: ev ? ev.messageIds : []
+      receiptType: ev ? ev.type : undefined, 
+      chatJid: ev ? ev.chat : undefined,
+      senderJid: ev ? ev.sender : undefined, 
+      messageIds: ev ? ev.messageIds : []
     }
   };
 }
@@ -228,7 +252,8 @@ function createBridge(ctx) {
   };
 
   function _ensureEnabled() {
-    if (ctx.globalOptions.enableE2EE === false)
+    // Auto-detect: always allow E2EE unless explicitly disabled
+    if (ctx.globalOptions && ctx.globalOptions.enableE2EE === false)
       throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐢𝐬 𝐝𝐢𝐬𝐚𝐛𝐥𝐞𝐝. 𝐬𝐞𝐭 𝐞𝐧𝐚𝐛𝐥𝐞𝐄2𝐄𝐄:𝐭𝐫𝐮𝐞 𝐢𝐧 𝐜𝐨𝐧𝐟𝐢𝐠.");
   }
 
@@ -269,13 +294,20 @@ function createBridge(ctx) {
       var mapped = _mapMsg(ev);
       global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
       global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
-      if (mapped.messageID && mapped.threadID)
+      // Store both E2EE JID and numeric ID mapping
+      if (mapped.messageID && mapped.threadID) {
         global._e2eeMessageMap.set(String(mapped.messageID), String(mapped.threadID));
+        // Also store full JID for internal use
+        if (ev.chatJid) global._e2eeMessageMap.set(String(mapped.messageID) + "_jid", String(ev.chatJid));
+      }
       if (mapped.messageID && ev.senderJid)
         global._e2eeSenderJidMap.set(String(mapped.messageID), String(ev.senderJid));
       if (ev.replyTo && ev.chatJid) {
         var _rtReg = ev.replyTo.messageId || ev.replyTo.id;
-        if (_rtReg) global._e2eeMessageMap.set(String(_rtReg), String(ev.chatJid));
+        if (_rtReg) {
+          global._e2eeMessageMap.set(String(_rtReg), _extractThreadID(ev.chatJid));
+          global._e2eeMessageMap.set(String(_rtReg) + "_jid", String(ev.chatJid));
+        }
       }
       _callUserCallback(state.lastGlobalCallback, null, mapped);
     });
@@ -287,7 +319,7 @@ function createBridge(ctx) {
       if (/close 1006|unexpected EOF|ECONNRESET|ETIMEDOUT|read loop/i.test(msg)) {
         log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐭𝐫𝐚𝐧𝐬𝐢𝐞𝐧𝐭 𝐧𝐞𝐭𝐰𝐨𝐨𝐫𝐤 𝐞𝐫𝐫𝐨𝐫 — 𝐰𝐞𝐥𝐥𝐥 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭:", msg); return;
       }
-      _callUserCallback(state.lastGlobalCallback, err || new Error("𝐔𝐧𝐤𝐧𝐨𝐧 𝐄2𝐄𝐄 𝐞𝐫𝐫𝐨𝐞"));
+      _callUserCallback(state.lastGlobalCallback, err || new Error("𝐔𝐧𝐤𝐧𝐨𝐰𝐧 𝐄2𝐄𝐄 𝐞𝐫𝐫𝐨𝐞"));
     });
     state.client.on("disconnected", function (info) {
       state.connected = false; state.fullyReady = false;
@@ -432,7 +464,10 @@ global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
 global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
 
 function _regMsg(msgID, jid) {
-  if (msgID && jid) global._e2eeMessageMap.set(String(msgID), String(jid));
+  if (msgID && jid) {
+    global._e2eeMessageMap.set(String(msgID), _extractThreadID(jid));
+    global._e2eeMessageMap.set(String(msgID) + "_jid", String(jid));
+  }
 }
 
 var _EXT_MIME = {
@@ -515,11 +550,24 @@ function patchApiForE2EE(api, ctx) {
       return createBridge(ctx).sendTyping(chatJid, isTyping !== false).catch(function () {});
     };
   }
+  
+  // Add auto-detection helper for E2EE vs non-E2EE
+  if (typeof api.isE2EEChat !== "function") {
+    api.isE2EEChat = function(threadID) {
+      if (!threadID) return false;
+      // Check if we have E2EE mapping for this thread
+      return global._e2eeMessageMap && (
+        global._e2eeMessageMap.has(String(threadID)) ||
+        global._e2eeMessageMap.has(String(threadID) + "_jid")
+      );
+    };
+  }
 }
 
 module.exports = {
   isE2EEChatJid  : isE2EEChatJid,
   storeMedia     : storeMedia,
   createBridge   : createBridge,
-  patchApiForE2EE: patchApiForE2EE
+  patchApiForE2EE: patchApiForE2EE,
+  _extractThreadID: _extractThreadID
 };
