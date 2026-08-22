@@ -264,7 +264,6 @@ function buildAPI(globalOptions, html, jar) {
         if (fs.existsSync(_e2eeRootPath)) {
             const _rootCfg = JSON.parse(fs.readFileSync(_e2eeRootPath, 'utf8'));
             const _e2eeCfg = (_rootCfg && _rootCfg.e2ee) ? _rootCfg.e2ee : {};
-            if (_e2eeCfg.enable === true) globalOptions.enableE2EE = true;
             var _saveType = _e2eeCfg.saveType || (typeof _e2eeCfg.memoryOnly !== 'undefined' ? (_e2eeCfg.memoryOnly ? 'memory' : 'path') : 'memory');
             globalOptions.e2eeMemoryOnly = (_saveType !== 'path');
             if (_saveType === 'path' && _e2eeCfg.devicePath) globalOptions.e2eeDevicePath = _e2eeCfg.devicePath;
@@ -386,44 +385,42 @@ async function uploadImageToImgbb(image, expiration = 600) {
     
     api.listen = api.listenMqtt;
 
-    if (globalOptions.enableE2EE) {
-        try {
-            var _e2ee = require('./e2ee');
-            _e2ee.patchApiForE2EE(api, ctx);
+    try {
+        var _e2ee = require('./e2ee');
+        _e2ee.patchApiForE2EE(api, ctx);
 
-            api.connectE2EE = function (callback) {
-                var bridge = _e2ee.createBridge(ctx);
-                api._e2eeBridge = bridge;
-                return bridge.connect(callback);
-            };
+        api.connectE2EE = function (callback) {
+            var bridge = _e2ee.createBridge(ctx);
+            api._e2eeBridge = bridge;
+            return bridge.connect(callback);
+        };
 
-            api.getE2EEBridge = function () {
-                return ctx._e2eeBridge || null;
-            };
+        api.getE2EEBridge = function () {
+            return ctx._e2eeBridge || null;
+        };
 
-            api.getE2EEDeviceData = function (callback) {
-                var resolve, reject;
-                var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
-                if (ctx._e2eeDeviceData) {
-                    if (typeof callback === 'function') callback(null, ctx._e2eeDeviceData);
-                    resolve(ctx._e2eeDeviceData);
-                    return promise;
-                }
-                _e2ee.createBridge(ctx).getDeviceData()
-                    .then(function (d) {
-                        ctx._e2eeDeviceData = d;
-                        if (typeof callback === 'function') callback(null, d);
-                        resolve(d);
-                    })
-                    .catch(function (e) {
-                        if (typeof callback === 'function') callback(e);
-                        reject(e);
-                    });
+        api.getE2EEDeviceData = function (callback) {
+            var resolve, reject;
+            var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
+            if (ctx._e2eeDeviceData) {
+                if (typeof callback === 'function') callback(null, ctx._e2eeDeviceData);
+                resolve(ctx._e2eeDeviceData);
                 return promise;
-            };
-        } catch (_patchErr) {
-            log.warn('E2EE', '𝐅𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐢𝐧𝐢𝐭𝐢𝐚𝐥𝐢𝐬𝐞 𝐄2𝐄𝐄:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
-        }
+            }
+            _e2ee.createBridge(ctx).getDeviceData()
+                .then(function (d) {
+                    ctx._e2eeDeviceData = d;
+                    if (typeof callback === 'function') callback(null, d);
+                    resolve(d);
+                })
+                .catch(function (e) {
+                    if (typeof callback === 'function') callback(e);
+                    reject(e);
+                });
+            return promise;
+        };
+    } catch (_patchErr) {
+        log.warn('E2EE', '𝐅𝐚𝐢𝐥𝐞𝐝 𝐭𝐨 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐢𝐧𝐢𝐭𝐢𝐚𝐥𝐢𝐬𝐞 𝐄2𝐄𝐄:', _patchErr && _patchErr.message ? _patchErr.message : _patchErr);
     }
 
     return {
