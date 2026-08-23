@@ -24,7 +24,6 @@
 - [Examples](#-examples)
 - [Troubleshooting](#-troubleshooting)
 - [Security](#-security)
-- [Contributing](#-contributing)
 - [License](#-license)
 - [Support](#-support)
 
