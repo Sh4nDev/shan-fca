@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/shan-fca?logo=npm)](https://www.npmjs.com/package/shan-fca)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D12.0.0-brightgreen?logo=node.js)](https://nodejs.org/)
 
-> 🤖 **An advanced, unofficial Facebook Messenger API library for Node.js** - Build powerful bots with ease.
+> 🤖 **An advanced, unofficial Facebook Messenger API library for Node.js By SH AN** - Build powerful bots with ease.
 
 ---
 
