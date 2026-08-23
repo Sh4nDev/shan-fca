@@ -1,0 +1,18 @@
+"use strict";
+
+module.exports = function (defaultFuncs, api, ctx){
+  return function stopListenMqtt() {
+    if (!ctx.mqttClient) {
+      throw new Error("Not connected to MQTT");
+    }
+    console.log("stopListenMqtt", "Stopping...");
+    ctx.mqttClient.unsubscribe("/webrtc");
+    ctx.mqttClient.unsubscribe("/rtc_multi");
+    ctx.mqttClient.unsubscribe("/onevc");
+    ctx.mqttClient.publish("/browser_close", "{}");
+    ctx.mqttClient.end(false, (...data) => {
+      console.log("stopListenMqtt", "Stopped");
+      ctx.mqttClient = null;
+    });
+  }
+};
