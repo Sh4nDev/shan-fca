@@ -4,6 +4,8 @@
 [![Language](https://img.shields.io/badge/Language-JavaScript-yellow?logo=javascript)](https://www.javascript.com/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)]()
+[![npm version](https://img.shields.io/npm/v/shan-fca?logo=npm)](https://www.npmjs.com/package/shan-fca)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D12.0.0-brightgreen?logo=node.js)](https://nodejs.org/)
 
 > 🤖 **An advanced, unofficial Facebook Messenger API library for Node.js** - Build powerful bots with ease.
 
@@ -11,7 +13,6 @@
 
 ## 📋 Table of Contents
 
-- [Last Updated](#-last-updated)
 - [Features](#-features)
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
@@ -23,15 +24,11 @@
 - [Examples](#-examples)
 - [Troubleshooting](#-troubleshooting)
 - [Security](#-security)
+- [Contributing](#-contributing)
 - [License](#-license)
+- [Support](#-support)
 
 ---
-
-## Last Updated
-
-```
-Coming soon
-```
 
 ## 🚀 Features
 
@@ -45,6 +42,7 @@ Coming soon
 - ✅ **User Information** - Fetch detailed user profiles and thread information
 - ✅ **Chat Themes** - Change chat colors and styles
 - ✅ **AI Theme Generation** - Generate custom themes using AI prompts
+- ✅ **Message Reactions** - Add/remove emoji reactions to messages
 
 ### Advanced Features
 - 🔐 **End-to-End Encryption (E2EE)** - Secure messaging for encrypted chats
@@ -55,6 +53,8 @@ Coming soon
 - 🎯 **Event Streaming** - Real-time message streaming via MQTT
 - 💾 **Session Management** - Persistent sessions across restarts
 - 🛡️ **Error Recovery** - Robust error handling and recovery mechanisms
+- 🎨 **Theme Customization** - Predefined themes and custom color support
+- 📱 **Multi-Account Support** - Run multiple bot instances simultaneously
 
 ---
 
@@ -63,7 +63,6 @@ Coming soon
 ### Prerequisites
 - **Node.js** >= 12.0.0
 - **npm** >= 6.0.0 or **yarn** >= 1.22.0
-- **Python** 3.x (for native builds)
 
 ### Install via npm
 ```bash
@@ -74,6 +73,12 @@ npm install shan-fca
 ```bash
 yarn add shan-fca
 ```
+
+### Verify Installation
+```bash
+node -e "const login = require('shan-fca'); console.log('✅ ShAn-FCA installed successfully!');"
+```
+
 ---
 
 ## 🔌 Quick Start
@@ -94,7 +99,7 @@ login(
     console.log('✅ Successfully logged in!');
     
     // Send a test message
-    api.sendMessage('Hello from ShAn-FCA! 🤖', threadID, (err) => {
+    api.sendMessage('Hello from ShAn-FCA! 🤖', '123456789', (err) => {
       if (err) console.error(err);
       else console.log('✅ Message sent!');
     });
@@ -102,7 +107,7 @@ login(
 );
 ```
 
-### Using Promise
+### Using Promise/Async-Await
 
 ```javascript
 const login = require('shan-fca');
@@ -116,9 +121,16 @@ const login = require('shan-fca');
     
     console.log('✅ Logged in!');
     
-    // Use promises
-    await api.sendMessage('Hello!', threadID);
+    // Send message
+    await api.sendMessage('Hello!', '123456789');
     console.log('✅ Message sent!');
+    
+    // Listen to messages
+    api.listenMqtt((err, event) => {
+      if (event.type === 'message') {
+        console.log(`📨 ${event.senderName}: ${event.body}`);
+      }
+    });
   } catch (err) {
     console.error('❌ Error:', err);
   }
@@ -132,61 +144,22 @@ const login = require('shan-fca');
 ### Method 1: Email & Password
 
 ```javascript
-const login = require('shan-fca');
-
-login({
-  email: 'your.email@gmail.com',
-  password: 'your-password'
-}, (err, api) => {
-  // ...
-});
-```
-
-⚠️ **Security Note**: Storing passwords in code is dangerous. Use environment variables:
-
-```javascript
-login({
-  email: process.env.FB_EMAIL,
-  password: process.env.FB_PASSWORD
-}, (err, api) => {
-  // ...
-});
-```
-
-### Method 2: AppState (Recommended for Production)
-
-Save your AppState after first login:
-
-```javascript
-const login = require('shan-fca');
-const fs = require('fs');
-
-// First time - save appState
 login({
   email: process.env.FB_EMAIL,
   password: process.env.FB_PASSWORD
 }, (err, api) => {
   if (err) return console.error(err);
-  
-  // Save for next time
-  api.getAppState((err, appState) => {
-    fs.writeFileSync('appState.json', JSON.stringify(appState, null, 2));
-    console.log('✅ AppState saved!');
-  });
+  console.log('✅ Logged in!');
 });
 ```
 
-Subsequent logins using saved AppState:
+### Method 2: AppState (Recommended for Production)
 
 ```javascript
-const login = require('shan-fca');
-const fs = require('fs');
-
 const appState = JSON.parse(fs.readFileSync('appState.json'));
 
 login({ appState }, (err, api) => {
-  if (err) return console.error('❌ Session expired, re-authenticate');
-  
+  if (err) return console.error('❌ Session expired');
   console.log('✅ Logged in with saved session!');
 });
 ```
@@ -201,13 +174,10 @@ login({
   forceLogin: true
 }, (err, api) => {
   if (err?.error === 'login-approval') {
-    // 2FA required
-    const code = prompt('Enter 2FA code:');
+    const code = prompt('Enter 2FA code: ');
     err.continue(code)
-      .then(api => console.log('✅ Logged in!'))
+      .then(api => console.log('✅ Logged in with 2FA!'))
       .catch(err => console.error('❌ Invalid 2FA code'));
-  } else if (err) {
-    console.error('❌ Login failed:', err);
   }
 });
 ```
@@ -216,159 +186,85 @@ login({
 
 ## 📚 API Reference
 
-### Messaging
+### Send Message
 
-#### Send Message
 ```javascript
-// Basic text message
-api.sendMessage('Hello World!', threadID, (err, messageInfo) => {
+// Basic text
+api.sendMessage('Hello World!', threadID, (err, info) => {
   if (err) console.error(err);
-  console.log('Message ID:', messageInfo.messageID);
 });
 
 // With attachments
 api.sendMessage({
-  body: 'Check this out!',
+  body: 'Check this!',
   attachment: fs.createReadStream('image.png')
 }, threadID);
 
 // With mentions
 api.sendMessage({
-  body: 'SH AN, what do you think?',
-  mentions: [{
-    tag: 'SH AN',
-    id: targetUid 
-  }]
+  body: 'Hey {{User}}, check this!',
+  mentions: [{ tag: 'User', id: '123456789' }]
 }, threadID);
 
 // With sticker
-api.sendMessage({
-  sticker: 'STICKER_ID_HERE'
-}, threadID);
-```
-
-#### Send Direct Message (DM)
-```javascript
-api.sendMessage('Private message', userID, (err) => {
-  if (err) console.error(err);
-});
-```
-
-#### Send Typing Indicator
-```javascript
-api.sendTypingIndicator(threadID, (err) => {
-  if (err) console.error(err);
-});
-
-// Simulate 3 seconds of typing
-setTimeout(() => {
-  api.sendMessage('I was typing...', threadID);
-}, 3000);
-```
-
-#### Edit Message
-```javascript
-api.editMessage('Updated text!', messageID, (err) => {
-  if (err) console.error(err);
-});
-```
-
-#### Delete Message
-```javascript
-api.unsendMessage(messageID, (err) => {
-  if (err) console.error(err);
-});
-```
-
-#### Add Reaction/Emoji
-```javascript
-api.setMessageReaction('👍', messageID, (err) => {
-  if (err) console.error(err);
-});
+api.sendMessage({ sticker: 'STICKER_ID' }, threadID);
 ```
 
 ### Thread Management
 
-#### Get Thread Info
 ```javascript
-api.getThreadInfo(threadID, (err, threadInfo) => {
-  if (err) return console.error(err);
-  
-  console.log('Thread name:', threadInfo.threadName);
-  console.log('Participants:', threadInfo.participantIDs);
-  console.log('Unread count:', threadInfo.unreadCount);
+// Get thread info
+api.getThreadInfo(threadID, (err, info) => {
+  console.log('Name:', info.threadName);
+  console.log('Participants:', info.participantIDs);
 });
-```
 
-#### Rename Thread
-```javascript
-api.changeThreadSubject('New Group Name', threadID, (err) => {
-  if (err) console.error(err);
-});
-```
+// Rename thread
+api.changeThreadSubject('New Name', threadID, callback);
 
-#### Change Thread Color
-```javascript
-// Use hex colors
-api.changeThreadColor('#0084FF', threadID, (err) => {
-  if (err) console.error(err);
-});
-```
+// Change color
+api.changeThreadColor('#0084FF', threadID, callback);
 
-#### Add User to Group
-```javascript
-api.addUserToGroup(userID, threadID, (err) => {
-  if (err) console.error(err);
-});
-```
+// Add user
+api.addUserToGroup(userID, threadID, callback);
 
-#### Remove User from Group
-```javascript
-api.removeUserFromGroup(userID, threadID, (err) => {
-  if (err) console.error(err);
-});
-```
+// Remove user
+api.removeUserFromGroup(userID, threadID, callback);
 
-#### Mark Thread as Read
-```javascript
-api.markAsRead(threadID, (err) => {
-  if (err) console.error(err);
-});
+// Mute/Unmute
+api.muteThread(threadID, 3600000, callback); // 1 hour
+api.muteThread(threadID, 0, callback); // Unmute
 ```
 
 ### User Information
 
-#### Get User Info
 ```javascript
-api.getUserInfo(userID, (err, userInfo) => {
-  if (err) return console.error(err);
-  
-  console.log('Name:', userInfo[userID].name);
-  console.log('Photo:', userInfo[userID].photo);
-  console.log('Gender:', userInfo[userID].gender);
+// Get user info
+api.getUserInfo(userID, (err, info) => {
+  console.log('Name:', info[userID].name);
+  console.log('Photo:', info[userID].photo);
 });
+
+// Search users
+api.searchForUser('John', (err, results) => {
+  results.forEach(user => console.log(user.name));
+});
+
+// Current user ID
+const myID = api.getCurrentUserID();
 ```
 
-#### Search Users
-```javascript
-api.searchForUser('SH AN', (err, results) => {
-  if (err) return console.error(err);
-  
-  results.forEach(user => {
-    console.log(`${user.name} (ID: ${user.userID})`);
-  });
-});
-```
+### Edit & Delete Messages
 
-#### Get Message
 ```javascript
-api.getMessage(messageID, (err, messageInfo) => {
-  if (err) return console.error(err);
-  
-  console.log('Sender:', messageInfo.senderName);
-  console.log('Body:', messageInfo.body);
-  console.log('Timestamp:', messageInfo.timestamp);
-});
+// Edit
+api.editMessage('Updated!', messageID, callback);
+
+// Delete
+api.unsendMessage(messageID, callback);
+
+// React
+api.setMessageReaction('👍', messageID, callback);
 ```
 
 ---
@@ -385,13 +281,11 @@ api.listenMqtt((err, event) => {
     case 'message':
       console.log(`📨 ${event.senderName}: ${event.body}`);
       break;
-      
-    case 'event':
-      console.log('📌 Event:', event.eventData);
+    case 'typing':
+      console.log(`⌨️ ${event.senderName} is typing...`);
       break;
-      
-    case 'presence':
-      console.log(`👤 ${event.senderName} is ${event.statuses}`);
+    case 'reaction':
+      console.log(`😊 ${event.senderName} reacted with ${event.reaction}`);
       break;
   }
 });
@@ -399,98 +293,33 @@ api.listenMqtt((err, event) => {
 
 ### Event Types
 
-| Event Type | Description | Data |
-|-----------|-------------|------|
-| `message` | New message received | `body`, `senderID`, `threadID`, `attachments` |
-| `messageEdit` | Message edited | `messageID`, `newBody`, `senderID` |
+| Event | Description | Data |
+|-------|-------------|------|
+| `message` | New message | `body`, `senderID`, `threadID`, `attachments` |
+| `messageEdit` | Message edited | `messageID`, `body`, `senderID` |
 | `messageUnsend` | Message deleted | `messageID`, `senderID` |
-| `reaction` | Emoji reaction added | `messageID`, `reaction`, `userID` |
+| `reaction` | Reaction added | `messageID`, `reaction`, `userID` |
 | `typing` | User typing | `isTyping`, `userID`, `threadID` |
 | `readReceipt` | Message read | `reader`, `time`, `threadID` |
-| `presence` | User online status | `userID`, `status` |
-
-### Advanced Event Listener
-
-```javascript
-api.listenMqtt((err, event) => {
-  if (err) return console.error(err);
-  
-  // Filter events
-  if (event.type !== 'message') return;
-  
-  const { body, senderID, threadID, senderName } = event;
-  
-  // Ignore bot's own messages
-  if (senderID === api.getCurrentUserID()) return;
-  
-  // Log message
-  console.log(`[${new Date().toLocaleTimeString()}] ${senderName}: ${body}`);
-  
-  // Respond to specific messages
-  if (body?.toLowerCase().includes('hello')) {
-    api.sendMessage(`👋 Hey ${senderName}!`, threadID);
-  }
-});
-```
+| `presence` | Online status | `userID`, `statuses` |
 
 ---
 
 ## ⚙️ Configuration
 
-### Login Options
-
 ```javascript
 login(loginData, {
-  // Boolean options
-  online: true,              // Online status
-  selfListen: false,         // Receive own messages
-  listenEvents: true,        // Listen to all events
-  forceLogin: false,         // Force re-authentication
-  autoMarkDelivery: true,    // Auto-mark as delivered
-  autoMarkRead: false,       // Auto-mark as read
-  listenTyping: true,        // Listen to typing indicators
-  autoReconnect: true,       // Auto reconnect
-  emitReady: true,           // Emit ready event
-  
-  // String options
-  logLevel: 'info',          // silly, debug, verbose, info, warn, error
-  userAgent: 'Mozilla/5.0...',  // Custom user agent
-  proxy: 'http://proxy:port',   // Proxy URL
-  
-  // Number options
-  logRecordSize: 100,        // Max log records
-  pageID: '123456789'        // Page ID for page login
+  online: true,
+  selfListen: false,
+  listenEvents: true,
+  autoMarkDelivery: true,
+  autoMarkRead: false,
+  listenTyping: true,
+  autoReconnect: true,
+  logLevel: 'info', // silly, debug, verbose, info, warn, error
+  userAgent: 'Mozilla/5.0...',
+  proxy: 'http://proxy:port'
 }, (err, api) => {
-  // ...
-});
-```
-
-### Config File
-
-Create `config.json`:
-
-```json
-{
-  "email": "your.email@gmail.com",
-  "enableTypingIndicator": true,
-  "typingDuration": 3000,
-  "e2ee": {
-    "saveType": "path",
-    "devicePath": "./e2ee_devices"
-  },
-  "proxy": "http://proxy.example.com:8080"
-}
-```
-
-Load in your bot:
-
-```javascript
-const config = require('./config.json');
-
-login({
-  email: config.email,
-  appState: require('./appState.json')
-}, config, (err, api) => {
   // ...
 });
 ```
@@ -502,61 +331,38 @@ login({
 ### Command Bot
 
 ```javascript
-const login = require('shan-fca');
-const fs = require('fs');
-
 const commands = {
   '!help': (args, api, event) => {
-    api.sendMessage('📚 Available commands: !help, !ping, !time', event.threadID);
+    api.sendMessage('📚 Commands available', event.threadID);
   },
-  
   '!ping': (args, api, event) => {
     api.sendMessage('🏓 Pong!', event.threadID);
-  },
-  
-  '!time': (args, api, event) => {
-    const time = new Date().toLocaleTimeString();
-    api.sendMessage(`⏰ Current time: ${time}`, event.threadID);
   }
 };
 
-const appState = JSON.parse(fs.readFileSync('appState.json'));
-
-login({ appState }, (err, api) => {
-  if (err) return console.error(err);
+api.listenMqtt((err, event) => {
+  if (err || event.type !== 'message') return;
   
-  console.log('🤖 Bot started!');
-  
-  api.listenMqtt((err, event) => {
-    if (err || event.type !== 'message') return;
-    
-    const { body, threadID } = event;
-    if (!body) return;
-    
-    const [command, ...args] = body.split(' ');
-    
-    if (commands[command]) {
-      commands[command](args, api, event);
-    }
-  });
+  const [cmd, ...args] = event.body.split(' ');
+  if (commands[cmd]) {
+    commands[cmd](args, api, event);
+  }
 });
 ```
 
 ### Auto-Reply Bot
 
 ```javascript
+const responses = {
+  'hello': '👋 Hi there!',
+  'how are you': '😊 Great!',
+  'bye': '👋 See you!'
+};
+
 api.listenMqtt((err, event) => {
   if (err || event.type !== 'message') return;
   
-  const responses = {
-    'hello': '👋 Hi there!',
-    'how are you': '😊 I\'m great, thanks for asking!',
-    'bye': '👋 See you later!',
-    'thanks': '❤️ You\'re welcome!'
-  };
-  
   const body = event.body?.toLowerCase() || '';
-  
   Object.entries(responses).forEach(([trigger, response]) => {
     if (body.includes(trigger)) {
       api.sendMessage(response, event.threadID);
@@ -565,56 +371,22 @@ api.listenMqtt((err, event) => {
 });
 ```
 
-### Message Logger
+### Rate Limiting
 
 ```javascript
-const fs = require('fs');
+const userLimits = {};
+const LIMIT = 10;
 
 api.listenMqtt((err, event) => {
-  if (err || event.type !== 'message') return;
+  if (event.type !== 'message') return;
   
-  const log = {
-    timestamp: new Date().toISOString(),
-    sender: event.senderName,
-    message: event.body,
-    threadID: event.threadID
-  };
+  const userID = event.senderID;
+  userLimits[userID] = (userLimits[userID] || 0) + 1;
   
-  fs.appendFileSync('messages.log', JSON.stringify(log) + '\n');
-  console.log(`✅ Logged: ${event.senderName} - ${event.body}`);
-});
-```
-
-### E2EE Support
-
-```javascript
-// Connect to E2EE protected chats
-api.connectE2EE((err) => {
-  if (err) return console.error(err);
-  
-  console.log('🔐 E2EE connected!');
-  
-  // Listen to E2EE messages
-  api.listenMqtt((err, event) => {
-    if (event.type === 'message') {
-      console.log('🔒 Encrypted message:', event.body);
-    }
-  });
-});
-```
-
-### Proxy Configuration
-
-```javascript
-login({
-  email: process.env.FB_EMAIL,
-  password: process.env.FB_PASSWORD
-}, {
-  proxy: 'http://proxy.example.com:8080',
-  autoReconnect: true
-}, (err, api) => {
-  if (err) return console.error(err);
-  console.log('✅ Connected via proxy!');
+  if (userLimits[userID] > LIMIT) {
+    console.warn(`⚠️ Rate limit for ${userID}`);
+    return;
+  }
 });
 ```
 
@@ -622,67 +394,37 @@ login({
 
 ## 💡 Examples
 
-### Example 1: Welcome Bot
-
-```javascript
-const login = require('shan-fca');
-const fs = require('fs');
-
-const appState = JSON.parse(fs.readFileSync('appState.json'));
-
-login({ appState }, (err, api) => {
-  if (err) return console.error(err);
-  
-  api.listenMqtt((err, event) => {
-    if (err || event.type !== 'message') return;
-    
-    if (event.isGroup) {
-      api.sendMessage(`👋 Welcome to the group, ${event.senderName}!`, event.threadID);
-    }
-  });
-});
-```
-
-### Example 2: Quote Bot
+### Example 1: Quote Bot
 
 ```javascript
 const quotes = [
   "The only way to do great work is to love what you do. - Steve Jobs",
-  "Innovation distinguishes between a leader and a follower. - Steve Jobs",
-  "Life is what happens when you're busy making other plans. - John Lennon"
+  "Stay hungry, stay foolish. - Steve Jobs"
 ];
 
 api.listenMqtt((err, event) => {
   if (err || event.type !== 'message') return;
   
-  if (event.body?.toLowerCase().includes('!quote')) {
+  if (event.body?.includes('!quote')) {
     const quote = quotes[Math.floor(Math.random() * quotes.length)];
     api.sendMessage(`📝 ${quote}`, event.threadID);
   }
 });
 ```
 
-### Example 3: Admin Commands
+### Example 2: Admin Commands
 
 ```javascript
 const ADMINS = ['123456789', '987654321'];
 
 api.listenMqtt((err, event) => {
-  if (err || event.type !== 'message') return;
-  
-  if (!ADMINS.includes(event.senderID)) return;
+  if (err || !ADMINS.includes(event.senderID)) return;
   
   const { body, threadID } = event;
   
   if (body?.startsWith('!mute')) {
-    api.muteThread(threadID, 3600000, (err) => {
-      api.sendMessage('🔇 Thread muted for 1 hour', threadID);
-    });
-  }
-  
-  if (body?.startsWith('!unmute')) {
-    api.muteThread(threadID, 0, (err) => {
-      api.sendMessage('🔊 Thread unmuted', threadID);
+    api.muteThread(threadID, 3600000, () => {
+      api.sendMessage('🔇 Muted for 1 hour', threadID);
     });
   }
 });
@@ -692,66 +434,49 @@ api.listenMqtt((err, event) => {
 
 ## 🐛 Troubleshooting
 
-### Common Issues
-
-#### Login Fails with "Wrong username/password"
-- Verify credentials are correct
-- Check if 2FA is enabled
-- Try disabling browser extensions that intercept login
-- Use app-specific password if 2FA is enabled
-
-#### Messages Not Sending
+### Login Issues
 ```javascript
-// Check thread ID is valid (should be numeric)
-if (typeof threadID !== 'string' && typeof threadID !== 'number') {
-  console.error('Invalid threadID');
-}
+// Check credentials
+// Try 2FA if enabled
+// Verify account isn't locked
+```
 
-// Verify not sending to invalid threads
+### Messages Not Sending
+```javascript
+// Verify thread ID is valid
 api.getThreadInfo(threadID, (err, info) => {
-  if (err) console.error('Thread not found:', err);
+  if (err) console.error('Thread not found');
 });
 ```
 
-#### Disconnect Issues
+### Reconnection
 ```javascript
-// Implement reconnection logic
+let attempts = 0;
+
 function reconnect() {
-  login({ appState }, (err, api) => {
-    if (err) {
-      console.error('Reconnect failed, retrying in 5s...');
-      setTimeout(reconnect, 5000);
-    } else {
-      console.log('✅ Reconnected!');
-    }
-  });
+  if (attempts >= 5) return;
+  
+  const delay = Math.pow(2, attempts) * 1000;
+  setTimeout(() => {
+    login({ appState }, (err, api) => {
+      if (err) {
+        attempts++;
+        reconnect();
+      } else {
+        attempts = 0;
+        console.log('✅ Reconnected!');
+      }
+    });
+  }, delay);
 }
 ```
 
-#### Session Expired
-```javascript
-// Re-save appState periodically
-setInterval(() => {
-  api.getAppState((err, state) => {
-    if (!err) {
-      fs.writeFileSync('appState.json', JSON.stringify(state, null, 2));
-    }
-  });
-}, 24 * 60 * 60 * 1000); // Every 24 hours
-```
-
 ### Debug Mode
-
 ```javascript
-const log = require('npmlog');
-
-// Enable detailed logging
-log.level = 'info'; // silly, debug, verbose, info, warn, error
-
 login({ appState }, {
   logLevel: 'silly'
 }, (err, api) => {
-  // All operations will be logged
+  // Full logging enabled
 });
 ```
 
@@ -761,83 +486,53 @@ login({ appState }, {
 
 ### Best Practices
 
-1. **Never commit credentials**
-   ```javascript
-   // ❌ BAD
-   const login = require('shan-fca');
-   login({
-     email: 'your.email@gmail.com',
-     password: 'your-password'
-   }, ...);
-   
-   // ✅ GOOD
-   login({
-     email: process.env.FB_EMAIL,
-     password: process.env.FB_PASSWORD
-   }, ...);
-   ```
+1. **Use Environment Variables**
+```bash
+# .env
+FB_EMAIL=your@email.com
+FB_PASSWORD=your_password
+```
 
 2. **Use AppState in Production**
-   ```javascript
-   // Don't store passwords, use encrypted AppState
-   const appState = require('./appState.json');
-   login({ appState }, ...);
-   ```
+```javascript
+// Don't store passwords
+const appState = require('./appState.json');
+login({ appState }, callback);
+```
 
-3. **Implement Rate Limiting**
-   ```javascript
-   const rateLimit = {};
-   
-   api.listenMqtt((err, event) => {
-     if (event.type !== 'message') return;
-     
-     const userID = event.senderID;
-     rateLimit[userID] = (rateLimit[userID] || 0) + 1;
-     
-     if (rateLimit[userID] > 10) {
-       console.warn(`⚠️ Rate limit for ${userID}`);
-       return; // Ignore
-     }
-   });
-   ```
+3. **Add to .gitignore**
+```
+appState.json
+.env
+*.log
+```
 
-4. **Validate User Input**
-   ```javascript
-   const escapeHtml = (text) => {
-     const map = {
-       '&': '&amp;',
-       '<': '&lt;',
-       '>': '&gt;',
-       '"': '&quot;',
-       "'": '&#039;'
-     };
-     return text.replace(/[&<>"']/g, m => map[m]);
-   };
-   ```
+4. **Validate Input**
+```javascript
+function sanitize(text) {
+  return text
+    .replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', 
+      '>': '&gt;', '"': '&quot;',
+      "'": '&#039;'
+    }[m]))
+    .trim();
+}
+```
 
-5. **Use HTTPS/TLS for Proxies**
-   ```javascript
-   login(loginData, {
-     proxy: 'https://secure-proxy:8080' // Use HTTPS
-   }, ...);
-   ```
+5. **Use HTTPS for Proxies**
+```javascript
+login(data, {
+  proxy: 'https://secure-proxy:8080'
+}, callback);
+```
 
 ---
 
 ## 📝 Environment Variables
 
-Create `.env` file:
-
-```env
-FB_EMAIL=your.email@gmail.com
-FB_PASSWORD=your-password
-PROXY_URL=http://proxy:8080
-LOG_LEVEL=info
-```
-
-Load with `dotenv`:
-
 ```bash
+# Install dotenv
 npm install dotenv
 ```
 
@@ -848,39 +543,52 @@ login({
   email: process.env.FB_EMAIL,
   password: process.env.FB_PASSWORD
 }, {
-  proxy: process.env.PROXY_URL,
   logLevel: process.env.LOG_LEVEL
-}, ...);
+}, callback);
 ```
+
 ---
 
 ## ⚠️ Disclaimer
 
-**This is an unofficial library.** It is not endorsed by Facebook or Meta Platforms, Inc.
+**This is an unofficial library.** Not endorsed by Facebook/Meta.
 
-- Use responsibly and comply with Facebook's Terms of Service
-- Unauthorized bots may result in account restrictions or bans
-- Do not spam, harass, or abuse the platform
-- Respect user privacy and data
-- This library is for educational purposes
+- ⚠️ Use responsibly and comply with Facebook's ToS
+- ⚠️ Unauthorized bots may face account restrictions
+- ⚠️ Don't spam, harass, or abuse the platform
+- ⚠️ Respect user privacy and data protection
+- ⚠️ For educational purposes only
+- ⚠️ Developers not responsible for misuse
 
 ---
 
 ## 📄 License
 
-MIT License - See LICENSE file for details
+MIT License - See [LICENSE](LICENSE) file
 
 ---
 
-## 📞 Support & Contact
+## 📞 Support
 
-- **Facebook**: [Facebook](https://facebook.com/Sh4nDev1)
-- **GitHub Issues**: [Report bugs](https://github.com/Sh4nDev/shan-fca/issues)
-- **GitHub Discussions**: [Ask questions](https://github.com/Sh4nDev/shan-fca/discussions)
-- **Developer**: [@Sh4nDev](https://github.com/Sh4nDev)
+- **Issues**: [Report bugs](https://github.com/Sh4nDev/shan-fca/issues)
+- **Discussions**: [Ask questions](https://github.com/Sh4nDev/shan-fca/discussions)
+- **Facebook**: [Sh4nDev](https://facebook.com/Sh4nDev1)
+- **GitHub**: [@Sh4nDev](https://github.com/Sh4nDev)
 
 ---
 
 ## 🎉 Acknowledgments
 
 Built with ❤️ by the ShAn Development Team
+
+---
+
+<div align="center">
+
+**⭐ If you find this helpful, please give it a star!** ⭐
+
+Built with ❤️ for the Facebook Bot community
+
+**[↑ Back to Top](#-shAn-fca---facebook-chat-api)**
+
+</div>
