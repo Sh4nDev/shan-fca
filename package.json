@@ -1,0 +1,21 @@
+{
+  "name": "shan-fca",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sh4nDev/shan-fca.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sh4nDev/shan-fca/issues"
+  },
+  "homepage": "https://github.com/Sh4nDev/shan-fca#readme"
+}
