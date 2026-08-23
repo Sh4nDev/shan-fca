@@ -27,7 +27,7 @@
 
 ---
 
-**Last Updated**
+## Last Updated
 
 ```
 Coming soon
