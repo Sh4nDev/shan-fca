@@ -571,8 +571,10 @@ MIT License - See [LICENSE](LICENSE) file
 
 - **Issues**: [Report bugs](https://github.com/Sh4nDev/shan-fca/issues)
 - **Discussions**: [Ask questions](https://github.com/Sh4nDev/shan-fca/discussions)
-- **Facebook**: [Sh4nDev](https://facebook.com/Sh4nDev1)
 - **GitHub**: [@Sh4nDev](https://github.com/Sh4nDev)
+- **Facebook**: [SH AN](https://facebook.com/Sh4nDev1)
+- **Messenger**: [SH AN](m.me/Sh4nDev1)
+- **WhatsApp**: [SH AN](m.we/+8801825829588)
 
 ---
 
