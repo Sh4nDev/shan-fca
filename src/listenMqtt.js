@@ -83,7 +83,7 @@ function printMqttBanner(region, autoReconnect) {
         '',
         labelClr + '  📍  Region         ' + rst + valClr + regionVal + rst,
         labelClr + '  🔄  Auto-reconnect  ' + rst + reconnVal,
-        urlClr   + '  🌐  github.com/Sh4nDev/ShAn.s-Bot+ rst,
+        urlClr   + '  🌐  github.com/Sh4nDev/ShAn.s-Bot' + rst,
         '',
         accentClr + '  💎  developer ♡︎ 𝗦𝗵𝗔𝗻 ♡︎' + rst
     ];
