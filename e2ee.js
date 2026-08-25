@@ -68,15 +68,30 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
   path.join(__dirname, "shan", "index.mjs")
 ).href;
 
-// Polyfill File / Blob for Node < 20 before the ESM bundle initialises
+// Polyfill File / Blob / ReadableStream for Node < 20 before the ESM bundle initialises
 (function _polyfillFileGlobal() {
   try {
+    // Polyfill ReadableStream
+    if (typeof globalThis.ReadableStream === "undefined") {
+      globalThis.ReadableStream = require("stream").Readable;
+    }
+    
+    // Polyfill WritableStream
+    if (typeof globalThis.WritableStream === "undefined") {
+      globalThis.WritableStream = require("stream").Writable;
+    }
+    
+    // Polyfill TransformStream
+    if (typeof globalThis.TransformStream === "undefined") {
+      globalThis.TransformStream = require("stream").Transform;
+    }
+    
+    // Polyfill File
     if (typeof globalThis.File === "undefined") {
       var b = require("buffer");
       if (b && typeof b.File === "function") {
         globalThis.File = b.File;
       } else {
-        // Minimal File polyfill for older Node versions
         globalThis.File = class File {
           constructor(bits, name, options = {}) {
             this.name = name || "";
@@ -94,12 +109,13 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
         };
       }
     }
+    
+    // Polyfill Blob
     if (typeof globalThis.Blob === "undefined") {
       var b2 = require("buffer");
       if (b2 && typeof b2.Blob === "function") {
         globalThis.Blob = b2.Blob;
       } else {
-        // Minimal Blob polyfill for older Node versions
         globalThis.Blob = class Blob {
           constructor(bits, options = {}) {
             this.type = options.type || "";
@@ -169,14 +185,11 @@ function _numericId(jid) {
   return m ? m[1] : s;
 }
 
-// Extract numeric thread ID from E2EE JID for consistency with non-E2EE
 function _extractThreadID(jid) {
   if (!jid) return "";
   var s = String(jid);
-  // Handle E2EE JIDs like "1234567890@group.facebook.com" or "1234567890@facebook.com"
   var m = s.match(/^(\d+)/);
   if (m) return m[1];
-  // If no numeric prefix, return the original
   return s;
 }
 
@@ -200,7 +213,6 @@ function _mapMsg(ev) {
     };
   }
   return {
-    // Use same type format as non-E2EE for compatibility
     type: "message", 
     senderID: sid, 
     body: text, 
@@ -220,7 +232,6 @@ function _mapMsg(ev) {
 function _mapEdit(ev) {
   var text = ev && ev.text ? String(ev.text) : "";
   return {
-    // Use same type format as non-E2EE
     type: "message_edit", 
     senderID: ev && ev.senderId != null ? _numericId(String(ev.senderId)) : "",
     body: text, 
@@ -236,7 +247,6 @@ function _mapEdit(ev) {
 
 function _mapReaction(ev) {
   return {
-    // Use same type format as non-E2EE
     type: "message_reaction",
     threadID: ev && ev.chatJid ? _extractThreadID(ev.chatJid) : "",
     messageID: ev ? ev.messageId : undefined, 
@@ -250,7 +260,6 @@ function _mapReaction(ev) {
 
 function _mapReceipt(ev) {
   return {
-    // Keep same format but mark as E2EE
     type: "receipt", 
     isE2EE: true,
     e2ee: {
@@ -289,7 +298,6 @@ function createBridge(ctx) {
   };
 
   function _ensureEnabled() {
-    // Auto-detect: always allow E2EE unless explicitly disabled
     if (ctx.globalOptions && ctx.globalOptions.enableE2EE === false)
       throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐢𝐬 𝐝𝐢𝐬𝐚𝐛𝐥𝐞𝐝. 𝐬𝐞𝐭 𝐞𝐧𝐚𝐛𝐥𝐞𝐄2𝐄𝐄:𝐭𝐫𝐮𝐞 𝐢𝐧 𝐜𝐨𝐧𝐟𝐢𝐠.");
   }
@@ -333,10 +341,8 @@ function createBridge(ctx) {
       var mapped = _mapMsg(ev);
       global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
       global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
-      // Store both E2EE JID and numeric ID mapping
       if (mapped.messageID && mapped.threadID) {
         global._e2eeMessageMap.set(String(mapped.messageID), String(mapped.threadID));
-        // Also store full JID for internal use
         if (ev.chatJid) global._e2eeMessageMap.set(String(mapped.messageID) + "_jid", String(ev.chatJid));
       }
       if (mapped.messageID && ev.senderJid)
@@ -590,11 +596,9 @@ function patchApiForE2EE(api, ctx) {
     };
   }
   
-  // Add auto-detection helper for E2EE vs non-E2EE
   if (typeof api.isE2EEChat !== "function") {
     api.isE2EEChat = function(threadID) {
       if (!threadID) return false;
-      // Check if we have E2EE mapping for this thread
       return global._e2eeMessageMap && (
         global._e2eeMessageMap.has(String(threadID)) ||
         global._e2eeMessageMap.has(String(threadID) + "_jid")
