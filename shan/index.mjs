@@ -4,16 +4,81 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // src/client.ts
 import { EventEmitter } from "events";
 
-// Polyfill ReadableStream for Node < 18
-import { Readable, Writable, Transform } from "stream";
+// CRITICAL: Polyfill Web Streams API before any other imports
+import { Readable, Writable, Transform, Duplex } from "stream";
+
+// Polyfill ReadableStream
 if (typeof globalThis.ReadableStream === "undefined") {
   globalThis.ReadableStream = Readable;
 }
+
+// Polyfill WritableStream
 if (typeof globalThis.WritableStream === "undefined") {
   globalThis.WritableStream = Writable;
 }
+
+// Polyfill TransformStream
 if (typeof globalThis.TransformStream === "undefined") {
   globalThis.TransformStream = Transform;
+}
+
+// Polyfill MessageChannel
+if (typeof globalThis.MessageChannel === "undefined") {
+  try {
+    const { MessageChannel: MC } = await import("worker_threads");
+    globalThis.MessageChannel = MC;
+  } catch (_) {}
+}
+
+// Polyfill MessagePort
+if (typeof globalThis.MessagePort === "undefined") {
+  try {
+    const { MessagePort: MP } = await import("worker_threads");
+    globalThis.MessagePort = MP;
+  } catch (_) {}
+}
+
+// Polyfill structuredClone
+if (typeof globalThis.structuredClone === "undefined") {
+  globalThis.structuredClone = function(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  };
+}
+
+// Polyfill File
+if (typeof globalThis.File === "undefined") {
+  globalThis.File = class File {
+    constructor(bits, name, options = {}) {
+      this.name = name || "";
+      this.lastModified = options.lastModified || Date.now();
+      this.type = options.type || "";
+      this.size = 0;
+      if (Array.isArray(bits)) {
+        bits.forEach(bit => {
+          if (typeof bit === "string") this.size += bit.length;
+          else if (bit && bit.size) this.size += bit.size;
+          else if (bit && bit.length) this.size += bit.length;
+        });
+      }
+    }
+  };
+}
+
+// Polyfill Blob
+if (typeof globalThis.Blob === "undefined") {
+  globalThis.Blob = class Blob {
+    constructor(bits, options = {}) {
+      this.type = options.type || "";
+      this.size = 0;
+      if (Array.isArray(bits)) {
+        bits.forEach(bit => {
+          if (typeof bit === "string") this.size += bit.length;
+          else if (bit && bit.size) this.size += bit.size;
+          else if (bit && bit.length) this.size += bit.length;
+        });
+      }
+    }
+  };
 }
 
 // src/native.ts
@@ -777,7 +842,7 @@ var Client = class extends EventEmitter {
 
 // src/login.ts
 import { randomUUID } from "crypto";
-import { fetch } from "undici";
+// REMOVED: import { fetch } from "undici"; - Use native fetch instead
 var UIDLogin = class extends null {
   static {
     __name(this, "UIDLogin");
@@ -1142,4 +1207,3 @@ export {
   isThumbsUpSticker,
   login
 };
-//# sourceMappingURL=index.js.map
