@@ -297,7 +297,7 @@ async function uploadImageToImgbb(image, expiration = 600) {
         success: true,
         data: {
             url: result.ShAn,       
-            author: result.dev,
+            author: result.author,
         }
     };
 }
