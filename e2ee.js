@@ -7,6 +7,52 @@ var http   = require("http");
 var crypto = require("crypto");
 var stream = require("stream");
 
+// Add polyfills for missing globals that undici needs
+(function _polyfillGlobals() {
+  try {
+    // Polyfill ReadableStream if not available
+    if (typeof globalThis.ReadableStream === "undefined") {
+      var nodeStream = require("stream");
+      globalThis.ReadableStream = nodeStream.Readable;
+    }
+    
+    // Polyfill WritableStream if not available
+    if (typeof globalThis.WritableStream === "undefined") {
+      var nodeStream2 = require("stream");
+      globalThis.WritableStream = nodeStream2.Writable;
+    }
+    
+    // Polyfill TransformStream if not available
+    if (typeof globalThis.TransformStream === "undefined") {
+      var nodeStream3 = require("stream");
+      globalThis.TransformStream = nodeStream3.Transform;
+    }
+    
+    // Polyfill MessageChannel if not available
+    if (typeof globalThis.MessageChannel === "undefined") {
+      var workerThreads = require("worker_threads");
+      if (workerThreads && workerThreads.MessageChannel) {
+        globalThis.MessageChannel = workerThreads.MessageChannel;
+      }
+    }
+    
+    // Polyfill MessagePort if not available
+    if (typeof globalThis.MessagePort === "undefined") {
+      var workerThreads2 = require("worker_threads");
+      if (workerThreads2 && workerThreads2.MessagePort) {
+        globalThis.MessagePort = workerThreads2.MessagePort;
+      }
+    }
+    
+    // Polyfill structuredClone if not available
+    if (typeof globalThis.structuredClone === "undefined") {
+      globalThis.structuredClone = function(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      };
+    }
+  } catch (_) {}
+})();
+
 function isE2EEChatJid(value) {
   return typeof value === "string" && value.indexOf("@") !== -1;
 }
@@ -68,8 +114,10 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
   path.join(__dirname, "shan", "index.mjs")
 ).href;
 
+// Add more comprehensive polyfills for the E2EE library
 (function _polyfillFileGlobal() {
   try {
+    // File and Blob polyfills
     if (typeof globalThis.File === "undefined") {
       var b = require("buffer");
       if (b && typeof b.File === "function") globalThis.File = b.File;
@@ -77,6 +125,27 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
     if (typeof globalThis.Blob === "undefined") {
       var b2 = require("buffer");
       if (b2 && typeof b2.Blob === "function") globalThis.Blob = b2.Blob;
+    }
+    
+    // FormData polyfill (needed by undici)
+    if (typeof globalThis.FormData === "undefined") {
+      try {
+        var formData = require("form-data");
+        if (formData) globalThis.FormData = formData;
+      } catch (_) {}
+    }
+    
+    // fetch polyfill (needed by undici)
+    if (typeof globalThis.fetch === "undefined") {
+      try {
+        var undici = require("undici");
+        if (undici && undici.fetch) {
+          globalThis.fetch = undici.fetch;
+          globalThis.Headers = undici.Headers;
+          globalThis.Request = undici.Request;
+          globalThis.Response = undici.Response;
+        }
+      } catch (_) {}
     }
   } catch (_) {}
 })();
@@ -264,9 +333,10 @@ function createBridge(ctx) {
       throw new Error("𝐂𝐚𝐧𝐧𝐨𝐭 𝐥𝐨𝐚𝐝 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 (" + _E2EE_LIB_URL + "): " +
         (err && err.message ? err.message : String(err)));
     }
-    if (!mod || !mod.Client)
+    var ClientClass = mod.Client || (mod.default && mod.default.Client);
+    if (!ClientClass || typeof ClientClass !== "function")
       throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 𝐥𝐨𝐚𝐝𝐞𝐝 𝐛𝐮𝐭 𝐜𝐥𝐢𝐞𝐧𝐭 𝐞𝐱𝐩𝐨𝐫𝐭 𝐧𝐨𝐭 𝐟𝐨𝐮𝐧𝐝.");
-    return mod.Client;
+    return ClientClass;
   }
 
   function _attachEvents(initCb) {
@@ -283,6 +353,7 @@ function createBridge(ctx) {
       _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_fully_ready", isE2EE: true });
     });
     state.client.on("e2eeConnected", function () {
+      state.connected = true;
       _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_connected", isE2EE: true });
     });
     state.client.on("deviceDataChanged", function (p) {
@@ -341,7 +412,7 @@ function createBridge(ctx) {
     if (state.connectingPromise) return state.connectingPromise;
 
     state.connectingPromise = (async function () {
-      var Client = await _loadClient();
+      var ClientClass = await _loadClient();
       if (!state.client) {
         var cookies = _cookiesFromJar(ctx);
         if (!cookies.c_user || !cookies.xs)
@@ -359,7 +430,7 @@ function createBridge(ctx) {
           delete global._pendingE2eeDeviceData;
         }
 
-        state.client = new Client(cookies, opts);
+        state.client = new ClientClass(cookies, opts);
         _attachEvents(globalCallback);
       }
       await state.client.connect();
