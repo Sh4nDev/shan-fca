@@ -1,9 +1,4 @@
 "use strict";
-/* ═══════════════════════════════════════════════════════════════════════════
- *  shan-fca/e2ee.js  –  E2EE core for shan-fca
- *  Native binary : shan-fca/shan/messagix.so  (loaded via shan-fca/shan/index.mjs / koffi)
- * ═══════════════════════════════════════════════════════════════════════════
- */
 
 var log    = require("npmlog");
 var path   = require("path");
@@ -12,16 +7,10 @@ var http   = require("http");
 var crypto = require("crypto");
 var stream = require("stream");
 
-// ─────────────────────────────────────────────────────────────────────────────
-// § 1  THREAD  –  detect E2EE JIDs (any string containing "@")
-// ─────────────────────────────────────────────────────────────────────────────
 function isE2EEChatJid(value) {
   return typeof value === "string" && value.indexOf("@") !== -1;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// § 2  MEDIA SERVER  –  local HTTP cache for decrypted E2EE attachments
-// ─────────────────────────────────────────────────────────────────────────────
 var _mediaCache  = new Map();
 var _mediaServer = null;
 var _mediaPort   = null;
@@ -68,9 +57,6 @@ async function storeMedia(buffer, mimeType) {
   return "http://127.0.0.1:" + port + "/e2ee/" + id;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// § 3  BRIDGE  –  manages the native Labyrinth E2EE client lifecycle
-// ─────────────────────────────────────────────────────────────────────────────
 var _dynamicImport = null;
 function _getDynamicImport() {
   if (!_dynamicImport)
@@ -78,7 +64,6 @@ function _getDynamicImport() {
   return _dynamicImport;
 }
 
-// ESM bundle + native binary are relative to shan-fca/ (this file's directory)
 var _E2EE_LIB_URL = urlMod.pathToFileURL(
   path.join(__dirname, "shan", "index.mjs")
 ).href;
@@ -88,28 +73,44 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
   try {
     if (typeof globalThis.File === "undefined") {
       var b = require("buffer");
-      if (b && typeof b.File === "function") globalThis.File = b.File;
-      else {
-        // Create minimal File class if buffer doesn't have it
+      if (b && typeof b.File === "function") {
+        globalThis.File = b.File;
+      } else {
+        // Minimal File polyfill for older Node versions
         globalThis.File = class File {
           constructor(bits, name, options = {}) {
             this.name = name || "";
             this.lastModified = options.lastModified || Date.now();
             this.type = options.type || "";
-            this.size = Array.isArray(bits) ? bits.length : 0;
+            this.size = 0;
+            if (Array.isArray(bits)) {
+              bits.forEach(bit => {
+                if (typeof bit === "string") this.size += bit.length;
+                else if (bit && bit.size) this.size += bit.size;
+                else if (bit && bit.length) this.size += bit.length;
+              });
+            }
           }
         };
       }
     }
     if (typeof globalThis.Blob === "undefined") {
       var b2 = require("buffer");
-      if (b2 && typeof b2.Blob === "function") globalThis.Blob = b2.Blob;
-      else {
-        // Create minimal Blob class
+      if (b2 && typeof b2.Blob === "function") {
+        globalThis.Blob = b2.Blob;
+      } else {
+        // Minimal Blob polyfill for older Node versions
         globalThis.Blob = class Blob {
           constructor(bits, options = {}) {
             this.type = options.type || "";
-            this.size = Array.isArray(bits) ? bits.length : 0;
+            this.size = 0;
+            if (Array.isArray(bits)) {
+              bits.forEach(bit => {
+                if (typeof bit === "string") this.size += bit.length;
+                else if (bit && bit.size) this.size += bit.size;
+                else if (bit && bit.length) this.size += bit.length;
+              });
+            }
           }
         };
       }
@@ -117,7 +118,6 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
   } catch (_) {}
 })();
 
-// ── bridge internal helpers ───────────────────────────────────────────────────
 function _isPromiseLike(v) { return v && typeof v.then === "function"; }
 
 function _callUserCallback(cb, err, msg) {
@@ -162,7 +162,6 @@ function _normalizeAtt(a) {
   };
 }
 
-// Extract the numeric prefix from an E2EE JID like "61568577897207:69@msgr" → "61568577897207"
 function _numericId(jid) {
   if (!jid) return "";
   var s = String(jid);
@@ -170,17 +169,26 @@ function _numericId(jid) {
   return m ? m[1] : s;
 }
 
+// Extract numeric thread ID from E2EE JID for consistency with non-E2EE
+function _extractThreadID(jid) {
+  if (!jid) return "";
+  var s = String(jid);
+  // Handle E2EE JIDs like "1234567890@group.facebook.com" or "1234567890@facebook.com"
+  var m = s.match(/^(\d+)/);
+  if (m) return m[1];
+  // If no numeric prefix, return the original
+  return s;
+}
+
 function _mapMsg(ev) {
   var text = ev && ev.text ? String(ev.text) : "";
   var sid  = ev && ev.senderId != null ? _numericId(String(ev.senderId)) : "";
-  var tid  = ev && ev.chatJid  ? String(ev.chatJid)
+  var tid  = ev && ev.chatJid  ? _extractThreadID(ev.chatJid)
            : (ev && ev.threadId != null ? String(ev.threadId) : "");
   var messageReply = null;
   if (ev && ev.replyTo) {
-    // Native bridge returns replyTo.messageId (not .id); support both for safety
     var _rtId = ev.replyTo.messageId != null ? ev.replyTo.messageId
               : ev.replyTo.id != null ? ev.replyTo.id : undefined;
-    // senderId can arrive as an empty protobuf object {} — treat that as unknown
     var _rtSender = (ev.replyTo.senderId != null &&
                      typeof ev.replyTo.senderId !== 'object')
                   ? _numericId(String(ev.replyTo.senderId)) : "";
@@ -192,7 +200,11 @@ function _mapMsg(ev) {
     };
   }
   return {
-    type: "e2ee_message", senderID: sid, body: text, threadID: tid,
+    // Use same type format as non-E2EE for compatibility
+    type: "message", 
+    senderID: sid, 
+    body: text, 
+    threadID: tid,
     messageID: ev.id != null ? String(ev.id) : ev.id,
     messageReply: messageReply,
     attachments: Array.isArray(ev.attachments) ? ev.attachments.map(_normalizeAtt) : [],
@@ -208,10 +220,11 @@ function _mapMsg(ev) {
 function _mapEdit(ev) {
   var text = ev && ev.text ? String(ev.text) : "";
   return {
-    type: "e2ee_message_edit", 
+    // Use same type format as non-E2EE
+    type: "message_edit", 
     senderID: ev && ev.senderId != null ? _numericId(String(ev.senderId)) : "",
     body: text, 
-    threadID: ev && ev.chatJid ? String(ev.chatJid) : "",
+    threadID: ev && ev.chatJid ? _extractThreadID(ev.chatJid) : "",
     messageID: ev ? ev.messageId : undefined,
     timestamp: ev && ev.timestampMs != null ? Number(ev.timestampMs) : Date.now(),
     isGroup: /@group\.facebook\.com$/i.test(ev && ev.chatJid ? ev.chatJid : ""),
@@ -223,8 +236,9 @@ function _mapEdit(ev) {
 
 function _mapReaction(ev) {
   return {
-    type: "e2ee_message_reaction",
-    threadID: ev && ev.chatJid ? String(ev.chatJid) : "",
+    // Use same type format as non-E2EE
+    type: "message_reaction",
+    threadID: ev && ev.chatJid ? _extractThreadID(ev.chatJid) : "",
     messageID: ev ? ev.messageId : undefined, 
     reaction: ev ? ev.reaction : undefined,
     senderID: ev && ev.senderId != null ? _numericId(String(ev.senderId)) : undefined,
@@ -236,7 +250,9 @@ function _mapReaction(ev) {
 
 function _mapReceipt(ev) {
   return {
-    type: "e2ee_receipt", isE2EE: true,
+    // Keep same format but mark as E2EE
+    type: "receipt", 
+    isE2EE: true,
     e2ee: {
       receiptType: ev ? ev.type : undefined, 
       chatJid: ev ? ev.chat : undefined,
@@ -260,10 +276,9 @@ function _normalizeMediaInput(input) {
   if (Array.isArray(input))   return Buffer.from(input);
   if (input && input.type === "Buffer" && Array.isArray(input.data)) return Buffer.from(input.data);
   if (typeof input === "string") return Buffer.from(input, "base64");
-  throw new Error("E2EE media data must be Buffer, byte array, Buffer-JSON, or base64 string");
+  throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐦𝐞𝐝𝐢𝐚 𝐝𝐚𝐭𝐚 𝐦𝐮𝐬𝐭 𝐛𝐞 𝐁𝐮𝐟𝐟𝐞𝐫, 𝐛𝐲𝐭𝐞 𝐚𝐫𝐫𝐚𝐲, 𝐁𝐮𝐟𝐟𝐞𝐫-𝐉𝐒𝐎𝐍, 𝐨𝐫 𝐛𝐚𝐬𝐞64 𝐬𝐭𝐫𝐢𝐧𝐠");
 }
 
-// ── createBridge ──────────────────────────────────────────────────────────────
 function createBridge(ctx) {
   if (ctx._e2eeBridge) return ctx._e2eeBridge;
 
@@ -276,20 +291,19 @@ function createBridge(ctx) {
   function _ensureEnabled() {
     // Auto-detect: always allow E2EE unless explicitly disabled
     if (ctx.globalOptions && ctx.globalOptions.enableE2EE === false)
-      throw new Error("E2EE is disabled. Set enableE2EE:true in config.");
+      throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐢𝐬 𝐝𝐢𝐬𝐚𝐛𝐥𝐞𝐝. 𝐬𝐞𝐭 𝐞𝐧𝐚𝐛𝐥𝐞𝐄2𝐄𝐄:𝐭𝐫𝐮𝐞 𝐢𝐧 𝐜𝐨𝐧𝐟𝐢𝐠.");
   }
 
   async function _loadClient() {
     var mod;
     try { mod = await _getDynamicImport()(_E2EE_LIB_URL); }
     catch (err) {
-      throw new Error("Cannot load E2EE bundle (" + _E2EE_LIB_URL + "): " +
+      throw new Error("𝐂𝐚𝐧𝐧𝐨𝐭 𝐥𝐨𝐚𝐝 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 (" + _E2EE_LIB_URL + "): " +
         (err && err.message ? err.message : String(err)));
     }
-    // Support both named and default exports
     var ClientClass = mod.Client || (mod.default && mod.default.Client);
     if (!ClientClass || typeof ClientClass !== "function")
-      throw new Error("E2EE bundle loaded but Client export not found");
+      throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 𝐥𝐨𝐚𝐝𝐞𝐝 𝐛𝐮𝐭 𝐜𝐥𝐢𝐞𝐧𝐭 𝐞𝐱𝐩𝐨𝐫𝐭 𝐧𝐨𝐭 𝐟𝐨𝐮𝐧𝐝.");
     return ClientClass;
   }
 
@@ -311,10 +325,7 @@ function createBridge(ctx) {
       _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_connected", isE2EE: true });
     });
     state.client.on("deviceDataChanged", function (p) {
-      if (p && p.deviceData) {
-        ctx._e2eeDeviceData = p.deviceData;
-        global._pendingE2eeDeviceData = p.deviceData;
-      }
+      if (p && p.deviceData) ctx._e2eeDeviceData = p.deviceData;
       _callUserCallback(state.lastGlobalCallback, null,
         { type: "e2ee_device_data_changed", isE2EE: true, deviceData: p ? p.deviceData : undefined });
     });
@@ -322,14 +333,20 @@ function createBridge(ctx) {
       var mapped = _mapMsg(ev);
       global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
       global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
-      if (mapped.messageID && mapped.threadID)
+      // Store both E2EE JID and numeric ID mapping
+      if (mapped.messageID && mapped.threadID) {
         global._e2eeMessageMap.set(String(mapped.messageID), String(mapped.threadID));
+        // Also store full JID for internal use
+        if (ev.chatJid) global._e2eeMessageMap.set(String(mapped.messageID) + "_jid", String(ev.chatJid));
+      }
       if (mapped.messageID && ev.senderJid)
         global._e2eeSenderJidMap.set(String(mapped.messageID), String(ev.senderJid));
-      // Register replyTo message ID so unsend/react works on replied messages.
       if (ev.replyTo && ev.chatJid) {
         var _rtReg = ev.replyTo.messageId || ev.replyTo.id;
-        if (_rtReg) global._e2eeMessageMap.set(String(_rtReg), String(ev.chatJid));
+        if (_rtReg) {
+          global._e2eeMessageMap.set(String(_rtReg), _extractThreadID(ev.chatJid));
+          global._e2eeMessageMap.set(String(_rtReg) + "_jid", String(ev.chatJid));
+        }
       }
       _callUserCallback(state.lastGlobalCallback, null, mapped);
     });
@@ -339,17 +356,17 @@ function createBridge(ctx) {
     state.client.on("error", function (err) {
       var msg = err && err.message ? err.message : String(err || "");
       if (/close 1006|unexpected EOF|ECONNRESET|ETIMEDOUT|read loop/i.test(msg)) {
-        log.warn("e2ee", "Transient network error — will reconnect:", msg); return;
+        log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐭𝐫𝐚𝐧𝐬𝐢𝐞𝐧𝐭 𝐧𝐞𝐭𝐰𝐨𝐨𝐫𝐤 𝐞𝐫𝐫𝐨𝐫 — 𝐰𝐞𝐥𝐥𝐥 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭:", msg); return;
       }
-      _callUserCallback(state.lastGlobalCallback, err || new Error("Unknown E2EE error"));
+      _callUserCallback(state.lastGlobalCallback, err || new Error("𝐔𝐧𝐤𝐧𝐨𝐰𝐧 𝐄2𝐄𝐄 𝐞𝐫𝐫𝐨𝐞"));
     });
     state.client.on("disconnected", function (info) {
       state.connected = false; state.fullyReady = false;
-      log.warn("e2ee", "E2EE disconnected — reconnecting in 5s");
+      log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐝𝐢𝐬𝐜𝐨𝐧𝐧𝐞𝐜𝐭𝐞𝐝 — 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭𝐢𝐝𝐢𝐧𝐠 𝐢𝐧 5𝐬..");
       setTimeout(function () {
         if (!state.connectingPromise) {
           var cb = (ctx && ctx._globalCallback) || state.lastGlobalCallback;
-          connect(cb).catch(function (e) { log.error("e2ee", "Reconnect failed:", e && e.message ? e.message : e); });
+          connect(cb).catch(function (e) { log.error("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐫𝐞𝐜𝐨𝐧𝐧𝐞𝐜𝐭 𝐟𝐚𝐢𝐥𝒆𝐝:", e && e.message ? e.message : e); });
         }
       }, 5000);
       _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_disconnected", isE2EE: true, data: info || null });
@@ -367,7 +384,7 @@ function createBridge(ctx) {
       if (!state.client) {
         var cookies = _cookiesFromJar(ctx);
         if (!cookies.c_user || !cookies.xs)
-          throw new Error("Cannot start E2EE: c_user/xs cookies missing");
+          throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐚𝐧𝐧𝐨𝐭 𝐬𝐭𝐚𝐫𝐭 𝐄2𝐄𝐄: c_user/xs cookies missing");
 
         var opts = {
           enableE2EE: true,
@@ -473,7 +490,7 @@ function createBridge(ctx) {
         case "sticker":
           return client.sendE2EESticker(jid, buf, o.mimeType || "image/webp",
             { replyToId: o.replyToId, replyToSenderJid: o.replyToSenderJid });
-        default: throw new Error("Unsupported E2EE mediaType: " + ntype);
+        default: throw new Error("𝐔𝐧𝐬𝐮𝐩𝐩𝐨𝐫𝐭𝐞𝐝 𝐄2𝐄𝐄 𝐦𝐞𝐝𝐢𝐚𝐓𝐲𝐩𝐞: " + ntype);
       }
     }
   };
@@ -482,14 +499,14 @@ function createBridge(ctx) {
   return bridge;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// § 4  PATCH API  –  wraps existing api methods to auto-route E2EE JIDs
-// ─────────────────────────────────────────────────────────────────────────────
 global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
 global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
 
 function _regMsg(msgID, jid) {
-  if (msgID && jid) global._e2eeMessageMap.set(String(msgID), String(jid));
+  if (msgID && jid) {
+    global._e2eeMessageMap.set(String(msgID), _extractThreadID(jid));
+    global._e2eeMessageMap.set(String(msgID) + "_jid", String(jid));
+  }
 }
 
 var _EXT_MIME = {
@@ -539,14 +556,12 @@ function _streamToBuffer(r) {
 }
 
 function patchApiForE2EE(api, ctx) {
-  // downloadE2EEMedia helper
   if (typeof api.downloadE2EEMedia !== "function") {
     api.downloadE2EEMedia = function (options) {
       return createBridge(ctx).downloadMedia(options);
     };
   }
 
-  // resolveE2EEAttachment – download encrypted attachment, return local URL
   if (typeof api.resolveE2EEAttachment !== "function") {
     api.resolveE2EEAttachment = async function (att) {
       if (!att || !att.isE2EE) return att;
@@ -568,22 +583,30 @@ function patchApiForE2EE(api, ctx) {
     };
   }
 
-  // sendTypingE2EE
   if (typeof api.sendTypingE2EE !== "function") {
     api.sendTypingE2EE = function (chatJid, isTyping) {
       if (!isE2EEChatJid(chatJid)) return Promise.resolve();
       return createBridge(ctx).sendTyping(chatJid, isTyping !== false).catch(function () {});
     };
   }
+  
+  // Add auto-detection helper for E2EE vs non-E2EE
+  if (typeof api.isE2EEChat !== "function") {
+    api.isE2EEChat = function(threadID) {
+      if (!threadID) return false;
+      // Check if we have E2EE mapping for this thread
+      return global._e2eeMessageMap && (
+        global._e2eeMessageMap.has(String(threadID)) ||
+        global._e2eeMessageMap.has(String(threadID) + "_jid")
+      );
+    };
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Exports
-// ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   isE2EEChatJid  : isE2EEChatJid,
   storeMedia     : storeMedia,
   createBridge   : createBridge,
   patchApiForE2EE: patchApiForE2EE,
-  _regMsg        : _regMsg
+  _extractThreadID: _extractThreadID
 };
