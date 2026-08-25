@@ -268,8 +268,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Connect E2EE (end-to-end encryption)
-   * @warn This Promise is not resolved after the connection setup is completed; instead, it is resolved after the function finishes executing.\
-   * You should not rely on this Promise to wait for the E2EE connection to be fully established.
    */
   async connectE2EE() {
     if (!this.handle) throw new Error("Not connected");
@@ -287,10 +285,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send a text message
-   *
-   * @param threadId - Thread ID to send to
-   * @param options - Message options (text, reply, mentions)
-   * @returns Send result with message ID
    */
   async sendMessage(threadId, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -307,10 +301,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send / Remove a reaction to a message
-   *
-   * @param threadId - Thread ID
-   * @param messageId - Message ID to react to
-   * @param emoji - Reaction emoji (to remove, simply omit this parameter)
    */
   async sendReaction(threadId, messageId, emoji) {
     if (!this.handle) throw new Error("Not connected");
@@ -318,9 +308,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Edit a message
-   *
-   * @param messageId - Message ID to edit
-   * @param newText - New text content
    */
   async editMessage(messageId, newText) {
     if (!this.handle) throw new Error("Not connected");
@@ -328,8 +315,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Unsend/delete a message
-   *
-   * @param messageId - Message ID to unsend
    */
   async unsendMessage(messageId) {
     if (!this.handle) throw new Error("Not connected");
@@ -337,10 +322,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send typing indicator
-   *
-   * @param threadId - Thread ID
-   * @param isTyping - Whether typing or not
-   * @param isGroup - Whether it's a group chat
    */
   async sendTypingIndicator(threadId, isTyping = true, isGroup = false) {
     if (!this.handle) throw new Error("Not connected");
@@ -348,9 +329,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Mark messages as read
-   *
-   * @param threadId - Thread ID
-   * @param watermarkTs - Timestamp to mark read up to (optional)
    */
   async markAsRead(threadId, watermarkTs) {
     if (!this.handle) throw new Error("Not connected");
@@ -358,13 +336,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Upload media to Messenger
-   *
-   * @param threadId - Thread ID
-   * @param data - File data as Buffer
-   * @param filename - Filename
-   * @param mimeType - MIME type
-   * @param isVoice - Whether it's a voice message
-   * @returns Upload result with Facebook ID
    */
   async uploadMedia(threadId, data, filename, mimeType, isVoice = false) {
     if (!this.handle) throw new Error("Not connected");
@@ -378,11 +349,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send an image
-   *
-   * @param threadId - Thread ID
-   * @param data - Image data as Buffer
-   * @param filename - Filename
-   * @param options - Optional: caption and replyToId
    */
   async sendImage(threadId, data, filename, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -397,11 +363,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send a video
-   *
-   * @param threadId - Thread ID
-   * @param data - Video data as Buffer
-   * @param filename - Filename
-   * @param options - Optional: caption and replyToId
    */
   async sendVideo(threadId, data, filename, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -416,11 +377,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send a voice message
-   *
-   * @param threadId - Thread ID
-   * @param data - Audio data as Buffer
-   * @param filename - Filename
-   * @param options - Optional: replyToId
    */
   async sendVoice(threadId, data, filename, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -433,12 +389,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send a file
-   *
-   * @param threadId - Thread ID
-   * @param data - File data as Buffer
-   * @param filename - Filename
-   * @param mimeType - MIME type
-   * @param options - Optional: caption and replyToId
    */
   async sendFile(threadId, data, filename, mimeType, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -454,10 +404,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send a sticker
-   *
-   * @param threadId - Thread ID
-   * @param stickerId - Sticker ID
-   * @param options - Optional: replyToId
    */
   async sendSticker(threadId, stickerId, options) {
     if (!this.handle) throw new Error("Not connected");
@@ -465,9 +411,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Create a 1:1 thread with a user
-   *
-   * @param userId - User ID to create thread with
-   * @returns Created thread info
    */
   async createThread(userId) {
     if (!this.handle) throw new Error("Not connected");
@@ -475,9 +418,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Get detailed information about a user
-   *
-   * @param userId - User ID
-   * @returns User info
    */
   async getUserInfo(userId) {
     if (!this.handle) throw new Error("Not connected");
@@ -485,12 +425,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Set group photo/avatar
-   *
-   * @param threadId - Thread ID
-   * @param data - Image data as Buffer or base64 string
-   * @param mimeType - MIME type (e.g., 'image/jpeg', 'image/png')
-   *
-   * @warn Cannot remove group photo. Messenger web doesn't have a remove option?
    */
   async setGroupPhoto(threadId, data, mimeType = "image/jpeg") {
     if (!this.handle) throw new Error("Not connected");
@@ -499,9 +433,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Rename a group thread
-   *
-   * @param threadId - Thread ID
-   * @param newName - New name
    */
   async renameThread(threadId, newName) {
     if (!this.handle) throw new Error("Not connected");
@@ -509,9 +440,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Mute a thread
-   *
-   * @param threadId - Thread ID
-   * @param muteSeconds - Duration in seconds (-1 for forever, 0 to unmute)
    */
   async muteThread(threadId, muteSeconds = -1) {
     if (!this.handle) throw new Error("Not connected");
@@ -519,16 +447,12 @@ var Client = class extends EventEmitter {
   }
   /**
    * Unmute a thread
-   *
-   * @param threadId - Thread ID
    */
   async unmuteThread(threadId) {
     return this.muteThread(threadId, 0);
   }
   /**
    * Delete a thread
-   *
-   * @param threadId - Thread ID
    */
   async deleteThread(threadId) {
     if (!this.handle) throw new Error("Not connected");
@@ -536,9 +460,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Search for users
-   *
-   * @param query - Search query
-   * @returns List of matching users
    */
   async searchUsers(query) {
     if (!this.handle) throw new Error("Not connected");
@@ -548,22 +469,24 @@ var Client = class extends EventEmitter {
   // ========== E2EE Methods ==========
   /**
    * Send an E2EE message
-   *
+   * 
+   * FIXED: Now accepts options object directly from e2ee.js bridge
    * @param chatJid - Chat JID
    * @param text - Message text
-   * @param options - Optional: replyToId and replyToSenderJid for replies
+   * @param options - Options object with replyToId and replyToSenderJid
    */
-  async sendE2EEMessage(chatJid, text, options) {
+  async sendE2EEMessage(chatJid, text, options = {}) {
     if (!this.handle) throw new Error("Not connected");
-    return native.sendE2EEMessage(this.handle, chatJid, text, options?.replyToId, options?.replyToSenderJid);
+    return native.sendE2EEMessage(
+      this.handle, 
+      chatJid, 
+      text, 
+      options?.replyToId, 
+      options?.replyToSenderJid
+    );
   }
   /**
    * Send / Remove an E2EE reaction
-   *
-   * @param chatJid - Chat JID
-   * @param messageId - Message ID
-   * @param senderJid - Sender JID
-   * @param emoji - Reaction emoji (To remove it, simply omit this parameter)
    */
   async sendE2EEReaction(chatJid, messageId, senderJid, emoji) {
     if (!this.handle) throw new Error("Not connected");
@@ -571,9 +494,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send E2EE typing indicator
-   *
-   * @param chatJid - Chat JID
-   * @param isTyping - Whether typing
    */
   async sendE2EETyping(chatJid, isTyping = true) {
     if (!this.handle) throw new Error("Not connected");
@@ -581,10 +501,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Edit an E2EE message
-   *
-   * @param chatJid - Chat JID
-   * @param messageId - Message ID to edit
-   * @param newText - New message text
    */
   async editE2EEMessage(chatJid, messageId, newText) {
     if (!this.handle) throw new Error("Not connected");
@@ -592,9 +508,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Unsend/delete an E2EE message
-   *
-   * @param chatJid - Chat JID
-   * @param messageId - Message ID to unsend
    */
   async unsendE2EEMessage(chatJid, messageId) {
     if (!this.handle) throw new Error("Not connected");
@@ -603,13 +516,10 @@ var Client = class extends EventEmitter {
   // ========== E2EE Media Methods ==========
   /**
    * Send an E2EE image
-   *
-   * @param chatJid - Chat JID
-   * @param data - Image data as Buffer
-   * @param mimeType - MIME type (e.g., image/jpeg, image/png)
-   * @param options - Optional caption, dimensions, and reply options
+   * 
+   * FIXED: Now matches e2ee.js bridge expectations
    */
-  async sendE2EEImage(chatJid, data, mimeType = "image/jpeg", options) {
+  async sendE2EEImage(chatJid, data, mimeType = "image/jpeg", options = {}) {
     if (!this.handle) throw new Error("Not connected");
     return native.sendE2EEImage(this.handle, {
       chatJid,
@@ -624,13 +534,8 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send an E2EE video
-   *
-   * @param chatJid - Chat JID
-   * @param data - Video data as Buffer
-   * @param mimeType - MIME type (default: video/mp4)
-   * @param options - Optional caption, dimensions, duration, and reply options
    */
-  async sendE2EEVideo(chatJid, data, mimeType = "video/mp4", options) {
+  async sendE2EEVideo(chatJid, data, mimeType = "video/mp4", options = {}) {
     if (!this.handle) throw new Error("Not connected");
     return native.sendE2EEVideo(this.handle, {
       chatJid,
@@ -646,13 +551,8 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send an E2EE audio/voice message
-   *
-   * @param chatJid - Chat JID
-   * @param data - Audio data as Buffer
-   * @param mimeType - MIME type (default: audio/ogg)
-   * @param options - Optional PTT (push-to-talk/voice message), duration, and reply options
    */
-  async sendE2EEAudio(chatJid, data, mimeType = "audio/ogg", options) {
+  async sendE2EEAudio(chatJid, data, mimeType = "audio/ogg", options = {}) {
     if (!this.handle) throw new Error("Not connected");
     return native.sendE2EEAudio(this.handle, {
       chatJid,
@@ -666,14 +566,8 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send an E2EE document/file
-   *
-   * @param chatJid - Chat JID
-   * @param data - File data as Buffer
-   * @param filename - Filename
-   * @param mimeType - MIME type
-   * @param options - Optional reply options
    */
-  async sendE2EEDocument(chatJid, data, filename, mimeType, options) {
+  async sendE2EEDocument(chatJid, data, filename, mimeType, options = {}) {
     if (!this.handle) throw new Error("Not connected");
     return native.sendE2EEDocument(this.handle, {
       chatJid,
@@ -686,13 +580,8 @@ var Client = class extends EventEmitter {
   }
   /**
    * Send an E2EE sticker
-   *
-   * @param chatJid - Chat JID
-   * @param data - Sticker data as Buffer (WebP format)
-   * @param mimeType - MIME type (default: image/webp)
-   * @param options - Optional reply options
    */
-  async sendE2EESticker(chatJid, data, mimeType = "image/webp", options) {
+  async sendE2EESticker(chatJid, data, mimeType = "image/webp", options = {}) {
     if (!this.handle) throw new Error("Not connected");
     return native.sendE2EESticker(this.handle, {
       chatJid,
@@ -704,10 +593,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Get E2EE device data as JSON string
-   *
-   * Use this to persist device data externally (e.g., in a database)
-   *
-   * @returns Device data as JSON string
    */
   getDeviceData() {
     if (!this.handle) throw new Error("Not connected");
@@ -716,10 +601,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Get the current cookies from the internal client state
-   *
-   * Use this to export updated cookies after they've been refreshed
-   *
-   * @returns Current cookies as key-value object
    */
   getCookies() {
     if (!this.handle) throw new Error("Not connected");
@@ -728,9 +609,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Register for web push notifications
-   *
-   * @param endpoint - Push notification endpoint URL
-   * @param keys - Push notification keys (p256dh and auth, base64 encoded)
    */
   async registerPushNotifications(endpoint, keys) {
     if (!this.handle) throw new Error("Not connected");
@@ -742,33 +620,21 @@ var Client = class extends EventEmitter {
   }
   /**
    * Download and decrypt E2EE media
-   *
-   * Use the mediaKey, mediaSha256, and directPath from attachment metadata
-   * to download and decrypt encrypted media.
-   *
-   * @param options - Download options from attachment metadata
-   * @returns Decrypted media data as Buffer
-   *
-   * @example
-   * ```typescript
-   * const attachment = message.attachments[0];
-   * const result = await client.downloadE2EEMedia({
-   *     directPath: attachment.directPath!,
-   *     mediaKey: attachment.mediaKey!,
-   *     mediaSha256: attachment.mediaSha256!,
-   *     mediaEncSha256: attachment.mediaEncSha256,
-   *     mediaType: attachment.type,
-   *     mimeType: attachment.mimeType!,
-   *     fileSize: attachment.fileSize!,
-   * });
-   * fs.writeFileSync('downloaded.jpg', result.data);
-   * ```
+   * 
+   * FIXED: Now returns { data: Buffer, mimeType, fileSize } directly
    */
   async downloadE2EEMedia(options) {
     if (!this.handle) throw new Error("Not connected");
     const result = await native.downloadE2EEMedia(this.handle, options);
+    
+    // FIXED: Convert base64 to Buffer if needed
+    let data = result.data;
+    if (typeof data === "string") {
+      data = Buffer.from(data, "base64");
+    }
+    
     return {
-      data: Buffer.from(result.data, "base64"),
+      data: data,
       mimeType: result.mimeType,
       fileSize: result.fileSize
     };
@@ -903,8 +769,6 @@ var Client = class extends EventEmitter {
   }
   /**
    * Unload the native library (for cleanup)
-   * @warn Any attempt to find or call a function from this library after unloading it will crash.
-   * @returns void
    */
   unloadLibrary() {
     if (this.handle) {
@@ -953,14 +817,6 @@ var UIDLogin = class extends null {
           client_input_params: {
             sim_phones: [],
             secure_family_device_id: randomUUID(),
-            /*
-            attestation_result: {
-                data: this.hashData(account.uid),
-                signature:
-                    "MEYCIQDtz5TqO0pwysy82Ko92FErORasLag9o/pQYlZl8+zaMgIhAKon529upFiPfGgoS6OkPKg0/VahBuSDxwiTgtzpYQA3",
-                keyHash: "92398b3e4d9ee926bae93a61fd75e18d750100c1e73fd44d4faa7b9ba9353eee",
-            },
-            */
             has_granted_read_contacts_permissions: 0,
             auth_secure_device_id: "",
             has_whatsapp_installed: 0,
@@ -1025,21 +881,18 @@ var UIDLogin = class extends null {
             is_from_logged_in_switcher: 0
           }
         }),
-        // const
         bloks_versioning_id: "cb6ac324faea83da28649a4d5046c3a4f0486cb987f8ab769765e316b075a76c",
         app_id: "com.bloks.www.bloks.caa.login.async.send_login_request"
       },
       scale: "1.5",
       nt_context: {
         using_white_navbar: true,
-        // const
         styles_id: "55d2af294359fa6bbdb8e045ff01fc5e",
         pixel_ratio: 1.5,
         is_push_on: true,
         debug_tooling_metadata_token: null,
         is_flipper_enabled: false,
         theme_params: [],
-        // can be dynamic
         bloks_version: "cb6ac324faea83da28649a4d5046c3a4f0486cb987f8ab769765e316b075a76c"
       }
     };
@@ -1059,13 +912,6 @@ var UIDLogin = class extends null {
       cookie: cookies.join("; ")
     };
   }
-  /**
-   * Performs Facebook login via Katana API
-   * @param account - Account with UID and password
-   * @returns Cookie and token upon successful authentication
-   * @warn Accounts with 2FA are not supported, and the function will return an error
-   * @deprecated This login method is unstable and may be blocked by Facebook at any time.
-   */
   static async login(account) {
     const headers = {
       "User-Agent": this.USER_AGENT,
@@ -1122,13 +968,6 @@ var Utils = class _Utils extends null {
   static {
     __name(this, "Utils");
   }
-  /**
-   * Parse cookies from various formats
-   * Automatically detects the format and parses accordingly
-   *
-   * @param input - Cookie data in any supported format
-   * @returns Parsed cookies object
-   */
   static parseCookies(input) {
     if (typeof input === "object" && !Array.isArray(input)) {
       return input;
@@ -1161,20 +1000,6 @@ var Utils = class _Utils extends null {
     }
     throw new Error("Unable to parse cookies: unknown format");
   }
-  /**
-   * Parse cookies from C3C UFC Utility / EditThisCookie array format
-   *
-   * @param cookies - Array of cookie objects
-   * @returns Parsed cookies object
-   *
-   * @example
-   * ```typescript
-   * const cookies = Utils.fromCookieArray([
-   *     { name: 'c_user', value: '123456' },
-   *     { name: 'xs', value: 'abc...' }
-   * ])
-   * ```
-   */
   static fromCookieArray(cookies) {
     const result = {};
     for (const cookie of cookies) {
@@ -1184,17 +1009,6 @@ var Utils = class _Utils extends null {
     }
     return result;
   }
-  /**
-   * Parse cookies from cookie header string format
-   *
-   * @param cookieString - Cookie string (e.g., "name1=value1; name2=value2")
-   * @returns Parsed cookies object
-   *
-   * @example
-   * ```typescript
-   * const cookies = Utils.fromCookieString('c_user=123456; xs=abc...; datr=xyz...')
-   * ```
-   */
   static fromCookieString(cookieString) {
     const result = {};
     const pairs = cookieString.split(/;\s*/);
@@ -1210,21 +1024,6 @@ var Utils = class _Utils extends null {
     }
     return result;
   }
-  /**
-   * Parse cookies from Netscape/HTTP cookie file format
-   *
-   * @param content - Netscape cookie file content
-   * @returns Parsed cookies object
-   *
-   * @example
-   * ```typescript
-   * const cookies = Utils.fromNetscape(`
-   * # Netscape HTTP Cookie File
-   * .facebook.com	TRUE	/	TRUE	1234567890	c_user	123456
-   * .facebook.com	TRUE	/	TRUE	1234567890	xs	abc...
-   * `)
-   * ```
-   */
   static fromNetscape(content) {
     const result = {};
     const lines = content.split("\n");
@@ -1244,43 +1043,13 @@ var Utils = class _Utils extends null {
     }
     return result;
   }
-  /**
-   * Parse cookies from Base64 encoded string
-   *
-   * @param base64 - Base64 encoded cookie data
-   * @returns Parsed cookies object
-   */
   static fromBase64(base64) {
     const decoded = Buffer.from(base64, "base64").toString("utf-8");
     return _Utils.parseCookies(decoded);
   }
-  /**
-   * Convert cookies object to cookie header string
-   *
-   * @param cookies - Cookies object
-   * @returns Cookie header string
-   *
-   * @example
-   * ```typescript
-   * const header = Utils.toCookieString({ c_user: '123456', xs: 'abc...' })
-   * // Returns: "c_user=123456; xs=abc..."
-   * ```
-   */
   static toCookieString(cookies) {
     return Object.entries(cookies).map(([name, value]) => `${name}=${value}`).join("; ");
   }
-  /**
-   * Convert cookies object to array format (C3C UFC Utility style)
-   *
-   * @param cookies - Cookies object
-   * @param domain - Cookie domain (default: .facebook.com)
-   * @returns Array of cookie objects
-   *
-   * @example
-   * ```typescript
-   * const arr = Utils.toCookieArray({ c_user: '123456', xs: 'abc...' })
-   * ```
-   */
   static toCookieArray(cookies, domain = ".facebook.com") {
     return Object.entries(cookies).filter(([, value]) => value !== void 0).map(([name, value]) => ({
       name,
@@ -1291,13 +1060,6 @@ var Utils = class _Utils extends null {
       httpOnly: true
     }));
   }
-  /**
-   * Convert cookies object to Netscape format
-   *
-   * @param cookies - Cookies object
-   * @param domain - Cookie domain (default: .facebook.com)
-   * @returns Netscape cookie file content
-   */
   static toNetscape(cookies, domain = ".facebook.com") {
     const lines = ["# Netscape HTTP Cookie File", "# Generated by meta-messenger.js", ""];
     for (const [name, value] of Object.entries(cookies)) {
@@ -1306,21 +1068,9 @@ var Utils = class _Utils extends null {
     }
     return lines.join("\n");
   }
-  /**
-   * Convert cookies to Base64 encoded JSON
-   *
-   * @param cookies - Cookies object
-   * @returns Base64 encoded string
-   */
   static toBase64(cookies) {
     return Buffer.from(JSON.stringify(cookies)).toString("base64");
   }
-  /**
-   * Filter cookies to only essential ones for Facebook/Messenger
-   *
-   * @param cookies - Cookies object
-   * @returns Filtered cookies with only essential keys
-   */
   static filterEssential(cookies) {
     const essential = ["c_user", "xs", "datr", "fr", "sb", "wd", "presence"];
     const result = {};
@@ -1331,29 +1081,14 @@ var Utils = class _Utils extends null {
     }
     return result;
   }
-  /**
-   * Validate that cookies contain required fields
-   *
-   * @param cookies - Cookies object
-   * @returns True if cookies are valid
-   */
   static validate(cookies) {
     const required = ["c_user", "xs"];
     return required.every((key) => cookies[key] && cookies[key].length > 0);
   }
-  /**
-   * Get missing required cookies
-   *
-   * @param cookies - Cookies object
-   * @returns Array of missing cookie names
-   */
   static getMissing(cookies) {
     const required = ["c_user", "xs"];
     return required.filter((key) => !cookies[key] || cookies[key].length === 0);
   }
-  /**
-   * Check if a string is valid Base64
-   */
   static isBase64(str) {
     if (str.length < 4) return false;
     const base64Regex = /^[A-Za-z0-9+/]+=*$/;
@@ -1409,4 +1144,3 @@ export {
   isThumbsUpSticker,
   login
 };
-//# sourceMappingURL=index.js.map
