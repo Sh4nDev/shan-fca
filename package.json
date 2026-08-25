@@ -1,6 +1,6 @@
 {
   "name": "shan-fca",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "This is a facebook chat api unofficial for Facebook bot and ShAn.s-Bot",
   "main": "Index.js",
   "files": [
