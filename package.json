@@ -5,7 +5,6 @@
   "main": "Index.js",
   "files": [
     "src/",
-    "build/",
     "shan/",
     "index.js",
     "index.mjs",
