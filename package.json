@@ -13,7 +13,6 @@
     "config.json"
   ],
   "scripts": {
-    "test": "node bot.js",
     "start": "node index.js"
   },
   "repository": {
