@@ -68,25 +68,20 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
   path.join(__dirname, "shan", "index.mjs")
 ).href;
 
-// Polyfill File / Blob / ReadableStream for Node < 20 before the ESM bundle initialises
 (function _polyfillFileGlobal() {
   try {
-    // Polyfill ReadableStream
     if (typeof globalThis.ReadableStream === "undefined") {
       globalThis.ReadableStream = require("stream").Readable;
     }
     
-    // Polyfill WritableStream
     if (typeof globalThis.WritableStream === "undefined") {
       globalThis.WritableStream = require("stream").Writable;
     }
     
-    // Polyfill TransformStream
     if (typeof globalThis.TransformStream === "undefined") {
       globalThis.TransformStream = require("stream").Transform;
     }
     
-    // Polyfill File
     if (typeof globalThis.File === "undefined") {
       var b = require("buffer");
       if (b && typeof b.File === "function") {
@@ -110,7 +105,6 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
       }
     }
     
-    // Polyfill Blob
     if (typeof globalThis.Blob === "undefined") {
       var b2 = require("buffer");
       if (b2 && typeof b2.Blob === "function") {
@@ -297,11 +291,6 @@ function createBridge(ctx) {
     lastReadyPayload: null, fullyReady: false
   };
 
-  function _ensureEnabled() {
-    if (ctx.globalOptions && ctx.globalOptions.enableE2EE === false)
-      throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐢𝐬 𝐝𝐢𝐬𝐚𝐛𝐥𝐞𝐝. 𝐬𝐞𝐭 𝐞𝐧𝐚𝐛𝐥𝐞𝐄2𝐄𝐄:𝐭𝐫𝐮𝐞 𝐢𝐧 𝐜𝐨𝐧𝐟𝐢𝐠.");
-  }
-
   async function _loadClient() {
     var mod;
     try { mod = await _getDynamicImport()(_E2EE_LIB_URL); }
@@ -380,7 +369,6 @@ function createBridge(ctx) {
   }
 
   async function connect(globalCallback) {
-    _ensureEnabled();
     if (typeof globalCallback === "function") state.lastGlobalCallback = globalCallback;
     if (state.connected && state.client) return state.client;
     if (state.connectingPromise) return state.connectingPromise;
@@ -426,7 +414,6 @@ function createBridge(ctx) {
   }
 
   async function _ensureClient() {
-    _ensureEnabled();
     if (state.connected && state.client) return state.client;
     return connect();
   }
@@ -577,7 +564,7 @@ function patchApiForE2EE(api, ctx) {
         var rawType = att.type === "photo" ? "image" : (att.type || "image");
         var res = await api.downloadE2EEMedia({
           directPath: att.directPath, mediaKey: att.mediaKey,
-          mediaSha256: att.mediaSha256, mediaEncSha256: att.mediaEncSha256 || undefined,
+          mediaSh4n: att.mediaSh4n, mediaEncSh4n: att.mediaEncSh4n || undefined,
           mediaType: rawType, mimeType: att.mimeType, fileSize: Number(att.fileSize)
         });
         var localUrl = await storeMedia(res.data, res.mimeType || att.mimeType || "image/jpeg");
