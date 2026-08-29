@@ -106,55 +106,70 @@ var LIB_FILE = libPath();
 if (!fs.existsSync(LIB_FILE)) {
   throw new Error(`Native library not found at ${LIB_FILE}. Run: npm run build:go`);
 }
-var lib = koffi.load(LIB_FILE);
-var mk = /* @__PURE__ */ __name((ret, name, args) => lib.func(name, ret, args), "mk");
-var fns = {
-  MxFreeCString: mk("void", "MxFreeCString", ["char*"]),
-  MxNewClient: mk("str", "MxNewClient", ["str"]),
-  MxConnect: mk("str", "MxConnect", ["str"]),
-  MxConnectE2EE: mk("str", "MxConnectE2EE", ["str"]),
-  MxDisconnect: mk("str", "MxDisconnect", ["str"]),
-  MxIsConnected: mk("str", "MxIsConnected", ["str"]),
-  MxSendMessage: mk("str", "MxSendMessage", ["str"]),
-  MxSendReaction: mk("str", "MxSendReaction", ["str"]),
-  MxEditMessage: mk("str", "MxEditMessage", ["str"]),
-  MxUnsendMessage: mk("str", "MxUnsendMessage", ["str"]),
-  MxSendTyping: mk("str", "MxSendTyping", ["str"]),
-  MxMarkRead: mk("str", "MxMarkRead", ["str"]),
-  MxUploadMedia: mk("str", "MxUploadMedia", ["str"]),
-  MxSendImage: mk("str", "MxSendImage", ["str"]),
-  MxSendVideo: mk("str", "MxSendVideo", ["str"]),
-  MxSendVoice: mk("str", "MxSendVoice", ["str"]),
-  MxSendFile: mk("str", "MxSendFile", ["str"]),
-  MxSendSticker: mk("str", "MxSendSticker", ["str"]),
-  MxCreateThread: mk("str", "MxCreateThread", ["str"]),
-  MxGetUserInfo: mk("str", "MxGetUserInfo", ["str"]),
-  MxSetGroupPhoto: mk("str", "MxSetGroupPhoto", ["str"]),
-  MxRenameThread: mk("str", "MxRenameThread", ["str"]),
-  MxMuteThread: mk("str", "MxMuteThread", ["str"]),
-  MxDeleteThread: mk("str", "MxDeleteThread", ["str"]),
-  MxSearchUsers: mk("str", "MxSearchUsers", ["str"]),
-  MxPollEvents: mk("str", "MxPollEvents", ["str"]),
-  MxSendE2EEMessage: mk("str", "MxSendE2EEMessage", ["str"]),
-  MxSendE2EEReaction: mk("str", "MxSendE2EEReaction", ["str"]),
-  MxSendE2EETyping: mk("str", "MxSendE2EETyping", ["str"]),
-  MxEditE2EEMessage: mk("str", "MxEditE2EEMessage", ["str"]),
-  MxUnsendE2EEMessage: mk("str", "MxUnsendE2EEMessage", ["str"]),
-  MxGetDeviceData: mk("str", "MxGetDeviceData", ["str"]),
-  // E2EE Media functions
-  MxSendE2EEImage: mk("str", "MxSendE2EEImage", ["str"]),
-  MxSendE2EEVideo: mk("str", "MxSendE2EEVideo", ["str"]),
-  MxSendE2EEAudio: mk("str", "MxSendE2EEAudio", ["str"]),
-  MxSendE2EEDocument: mk("str", "MxSendE2EEDocument", ["str"]),
-  MxSendE2EESticker: mk("str", "MxSendE2EESticker", ["str"]),
-  MxDownloadE2EEMedia: mk("str", "MxDownloadE2EEMedia", ["str"]),
-  // Cookie and push notification functions
-  MxGetCookies: mk("str", "MxGetCookies", ["str"]),
-  MxRegisterPushNotifications: mk("str", "MxRegisterPushNotifications", ["str"])
-};
+let lib = null;
+let fns = null;
+function getLib() {
+  if (lib) return lib;
+  if (!fs.existsSync(LIB_FILE)) {
+    throw new Error(`Native library not found at ${LIB_FILE}. Run: npm run build:go`);
+  }
+  lib = koffi.load(LIB_FILE);
+  return lib;
+}
+function mk(ret, name, args) {
+  return getLib().func(name, ret, args);
+}
+function getFns() {
+  if (fns) return fns;
+  fns = {
+    MxFreeCString: mk("void", "MxFreeCString", ["char*"]),
+    MxNewClient: mk("str", "MxNewClient", ["str"]),
+    MxConnect: mk("str", "MxConnect", ["str"]),
+    MxConnectE2EE: mk("str", "MxConnectE2EE", ["str"]),
+    MxDisconnect: mk("str", "MxDisconnect", ["str"]),
+    MxIsConnected: mk("str", "MxIsConnected", ["str"]),
+    MxSendMessage: mk("str", "MxSendMessage", ["str"]),
+    MxSendReaction: mk("str", "MxSendReaction", ["str"]),
+    MxEditMessage: mk("str", "MxEditMessage", ["str"]),
+    MxUnsendMessage: mk("str", "MxUnsendMessage", ["str"]),
+    MxSendTyping: mk("str", "MxSendTyping", ["str"]),
+    MxMarkRead: mk("str", "MxMarkRead", ["str"]),
+    MxUploadMedia: mk("str", "MxUploadMedia", ["str"]),
+    MxSendImage: mk("str", "MxSendImage", ["str"]),
+    MxSendVideo: mk("str", "MxSendVideo", ["str"]),
+    MxSendVoice: mk("str", "MxSendVoice", ["str"]),
+    MxSendFile: mk("str", "MxSendFile", ["str"]),
+    MxSendSticker: mk("str", "MxSendSticker", ["str"]),
+    MxCreateThread: mk("str", "MxCreateThread", ["str"]),
+    MxGetUserInfo: mk("str", "MxGetUserInfo", ["str"]),
+    MxSetGroupPhoto: mk("str", "MxSetGroupPhoto", ["str"]),
+    MxRenameThread: mk("str", "MxRenameThread", ["str"]),
+    MxMuteThread: mk("str", "MxMuteThread", ["str"]),
+    MxDeleteThread: mk("str", "MxDeleteThread", ["str"]),
+    MxSearchUsers: mk("str", "MxSearchUsers", ["str"]),
+    MxPollEvents: mk("str", "MxPollEvents", ["str"]),
+    MxSendE2EEMessage: mk("str", "MxSendE2EEMessage", ["str"]),
+    MxSendE2EEReaction: mk("str", "MxSendE2EEReaction", ["str"]),
+    MxSendE2EETyping: mk("str", "MxSendE2EETyping", ["str"]),
+    MxEditE2EEMessage: mk("str", "MxEditE2EEMessage", ["str"]),
+    MxUnsendE2EEMessage: mk("str", "MxUnsendE2EEMessage", ["str"]),
+    MxGetDeviceData: mk("str", "MxGetDeviceData", ["str"]),
+    // E2EE Media functions
+    MxSendE2EEImage: mk("str", "MxSendE2EEImage", ["str"]),
+    MxSendE2EEVideo: mk("str", "MxSendE2EEVideo", ["str"]),
+    MxSendE2EEAudio: mk("str", "MxSendE2EEAudio", ["str"]),
+    MxSendE2EEDocument: mk("str", "MxSendE2EEDocument", ["str"]),
+    MxSendE2EESticker: mk("str", "MxSendE2EESticker", ["str"]),
+    MxDownloadE2EEMedia: mk("str", "MxDownloadE2EEMedia", ["str"]),
+    // Cookie and push notification functions
+    MxGetCookies: mk("str", "MxGetCookies", ["str"]),
+    MxRegisterPushNotifications: mk("str", "MxRegisterPushNotifications", ["str"])
+  };
+  return fns;
+}
 function call(fn, payload) {
   const input = JSONBigNative.stringify(payload);
-  const bound = fns[fn];
+  const bound = getFns()[fn];
   const out = bound(input);
   const data = JSONBigNative.parse(out);
   if (!data.ok) throw new Error(data.error || "Unknown error");
@@ -226,7 +241,7 @@ var native = {
   // Cookie and push notification functions
   getCookies: /* @__PURE__ */ __name((handle) => call("MxGetCookies", { handle }), "getCookies"),
   registerPushNotifications: /* @__PURE__ */ __name((handle, options) => callAsync("MxRegisterPushNotifications", { handle, options }), "registerPushNotifications"),
-  unload: /* @__PURE__ */ __name(() => lib.unload(), "unload")
+  unload: /* @__PURE__ */ __name(() => getLib().unload(), "unload")
 };
 
 // src/client.ts
