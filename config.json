@@ -8,7 +8,7 @@
   "enableTypingIndicator": true,
   "typingDuration": 2000,
   "listenEvents": true,
-  "autoMarkRead": true,
+  "autoMarkRead": false,
   "autoMarkDelivery": false,
   "selfListen": false,
   "online": true,
