@@ -459,8 +459,8 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                 } catch (err) {
                     return globalCallback({ error: "Problem parsing message object.", detail: err, res: v, type: "parse_error" });
                 }
-                if (fmtMsg && ctx.globalOptions.autoMarkDelivery) {
-                    markDelivery(ctx, api, fmtMsg.threadID, fmtMsg.messageID);
+                if (fmtMsg && (ctx.globalOptions.autoMarkDelivery || ctx.globalOptions.autoMarkRead)) {
+                    markMessageStatus(ctx, api, fmtMsg.threadID, fmtMsg.messageID);
                 }
                 return !ctx.globalOptions.selfListen &&
                     (fmtMsg.senderID === ctx.i_userID || fmtMsg.senderID === ctx.userID) ?
@@ -619,14 +619,14 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                             })
                             .catch(function (err) { log.error("forcedFetch", err); })
                             .finally(function () {
-                                if (ctx.globalOptions.autoMarkDelivery) markDelivery(ctx, api, callbackToReturn.threadID, callbackToReturn.messageID);
+                                if (ctx.globalOptions.autoMarkDelivery || ctx.globalOptions.autoMarkRead) markMessageStatus(ctx, api, callbackToReturn.threadID, callbackToReturn.messageID);
                                 !ctx.globalOptions.selfListen && callbackToReturn.senderID === ctx.userID ? undefined : (function () { globalCallback(null, callbackToReturn); })();
                             });
                     } else {
                         callbackToReturn.delta = delta;
                     }
 
-                    if (ctx.globalOptions.autoMarkDelivery) markDelivery(ctx, api, callbackToReturn.threadID, callbackToReturn.messageID);
+                    if (ctx.globalOptions.autoMarkDelivery || ctx.globalOptions.autoMarkRead) markMessageStatus(ctx, api, callbackToReturn.threadID, callbackToReturn.messageID);
                     return !ctx.globalOptions.selfListen && callbackToReturn.senderID === ctx.userID ? undefined : (function () { globalCallback(null, callbackToReturn); })();
                 }
             }
@@ -766,16 +766,18 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
     }
 }
 
-function markDelivery(ctx, api, threadID, messageID) {
+function markMessageStatus(ctx, api, threadID, messageID) {
     if (threadID && messageID) {
-        api.markAsDelivered(threadID, messageID, function (err) {
-            if (err) log.error("markAsDelivered", err);
-            else if (ctx.globalOptions.autoMarkRead) {
-                api.markAsRead(threadID, function (err) {
-                    if (err) log.error("markAsDelivered", err);
-                });
-            }
-        });
+        if (ctx.globalOptions.autoMarkDelivery) {
+            api.markAsDelivered(threadID, messageID, function (err) {
+                if (err) log.error("markAsDelivered", err);
+            });
+        }
+        if (ctx.globalOptions.autoMarkRead) {
+            api.markAsRead(threadID, function (err) {
+                if (err) log.error("markAsRead", err);
+            });
+        }
     }
 }
 

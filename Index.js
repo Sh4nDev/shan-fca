@@ -677,6 +677,20 @@ function login(loginData, options, callback) {
         userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     };
 
+    try {
+        const configPath = path.join(process.cwd(), 'config.json');
+        if (fs.existsSync(configPath)) {
+            const configOptions = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const supportedOptions = {};
+            Boolean_Option.forEach(function (key) {
+                if (typeof configOptions[key] !== 'undefined') supportedOptions[key] = configOptions[key];
+            });
+            setOptions(globalOptions, supportedOptions);
+        }
+    } catch (e) {
+        log.warn("setOptions", "Failed to load config.json: " + e.message);
+    }
+
     var prCallback = null;
     if (utils.getType(callback) !== "Function" && utils.getType(callback) !== "AsyncFunction") {
         var rejectFunc = null;
