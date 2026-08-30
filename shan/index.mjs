@@ -96,10 +96,12 @@ function resolveDirname() {
 }
 __name(resolveDirname, "resolveDirname");
 function libPath() {
-  const base = path.join(resolveDirname(), "..", "build");
-  if (process.platform === "win32") return path.join(base, "messagix.dll");
-  if (process.platform === "darwin") return path.join(base, "messagix.dylib");
-  return path.join(base, "messagix.so");
+  const fileName = process.platform === "win32"
+    ? "messagix.dll"
+    : process.platform === "darwin" ? "messagix.dylib" : "messagix.so";
+  const packagedPath = path.join(resolveDirname(), fileName);
+  const buildPath = path.join(resolveDirname(), "..", "build", fileName);
+  return fs.existsSync(packagedPath) ? packagedPath : buildPath;
 }
 __name(libPath, "libPath");
 var LIB_FILE = libPath();
