@@ -693,6 +693,7 @@ function login(loginData, options, callback) {
     }
 
     if (loginData.email && loginData.password) {
+        setOptions(globalOptions, options);
         setOptions(globalOptions, {
             logLevel: "silent",
             forceLogin: true,
