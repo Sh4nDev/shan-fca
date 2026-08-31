@@ -130,6 +130,14 @@ var _E2EE_LIB_URL = urlMod.pathToFileURL(
 
 function _isPromiseLike(v) { return v && typeof v.then === "function"; }
 
+function isE2EEUnavailableError(err) {
+  if (!err) return false;
+  var text = (err && err.message ? err.message : String(err));
+  var lower = text.toLowerCase();
+  return /failed to load shared library|version `glibc_|glibc_[0-9.]+.* not found|libc\.so\.6.*not found|required by .*messagix\.so|dlopen|dlsym|cannot open shared object file|not a valid elf|unsupported.*architecture|glibc.*version.*not found/i.test(text)
+    || (/messagix\.so/i.test(text) && /glibc|libc\.so\.6|ld-linux|dlopen|dlsym/i.test(lower));
+}
+
 function _callUserCallback(cb, err, msg) {
   if (typeof cb !== "function") return;
   try {
@@ -295,6 +303,9 @@ function createBridge(ctx) {
     var mod;
     try { mod = await _getDynamicImport()(_E2EE_LIB_URL); }
     catch (err) {
+      if (isE2EEUnavailableError(err)) {
+        throw new Error("𝐄2𝐄𝐄 𝐢𝐬 𝐮𝐧𝐚𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 𝐨𝐧 𝐭𝐡𝐢𝐬 𝐬𝐲𝐬𝐭𝐞𝐦: 𝐭𝐡𝐞 𝐛𝐮𝐧𝐝𝐥𝐞𝐝 𝐧𝐚𝐭𝐢𝐯𝐞 𝐥𝐢𝐛𝐫𝐚𝐫𝐲 𝐫𝐞𝐪𝐮𝐢𝐫𝐞𝐬 𝐚 𝐬𝐭𝐫𝐢𝐜𝐭𝐥𝐲 𝐧𝐞𝐰𝐞𝐫 𝐆𝐋𝐈𝐁𝐂 𝐭𝐡𝐚𝐧 𝐭𝐡𝐢𝐬 𝐡𝐨𝐬𝐭. 𝐑𝐞𝐛𝐮𝐢𝐥𝐝 𝐬𝐡𝐚𝐧/𝐦𝐞𝐬𝐬𝐚𝐠𝐢𝐱.𝐬𝐨 𝐨𝐧 𝐭𝐡𝐞 𝐬𝐚𝐦𝐞 𝐋𝐢𝐧𝐮𝐱 𝐝𝐢𝐬𝐭𝐫𝐢𝐛𝐮𝐭𝐢𝐨𝐧 𝐨𝐫 𝐮𝐬𝐞 𝐚 𝐜𝐨𝐦𝐩𝐚𝐭𝐢𝐛𝐥𝐞 𝐬𝐞𝐫𝐯𝐞𝐫.");
+      }
       throw new Error("𝐂𝐚𝐧𝐧𝐨𝐭 𝐥𝐨𝐚𝐝 𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐛𝐮𝐧𝐝𝐥𝐞 (" + _E2EE_LIB_URL + "): " +
         (err && err.message ? err.message : String(err)));
     }
@@ -374,30 +385,42 @@ function createBridge(ctx) {
     if (state.connectingPromise) return state.connectingPromise;
 
     state.connectingPromise = (async function () {
-      var ClientClass = await _loadClient();
-      if (!state.client) {
-        var cookies = _cookiesFromJar(ctx);
-        if (!cookies.c_user || !cookies.xs)
-          throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐚𝐧𝐧𝐨𝐭 𝐬𝐭𝐚𝐫𝐭 𝐄2𝐄𝐄: c_user/xs cookies missing");
+      try {
+        var ClientClass = await _loadClient();
+        if (!state.client) {
+          var cookies = _cookiesFromJar(ctx);
+          if (!cookies.c_user || !cookies.xs)
+            throw new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐜𝐚𝐧𝐧𝐨𝐭 𝐬𝐭𝐚𝐫𝐭 𝐄2𝐄𝐄: c_user/xs cookies missing");
 
-        var opts = {
-          enableE2EE: true,
-          e2eeMemoryOnly: ctx.globalOptions.e2eeMemoryOnly !== false,
-          autoReconnect: true, logLevel: "none"
-        };
-        if (ctx.globalOptions.e2eeDevicePath) opts.devicePath = ctx.globalOptions.e2eeDevicePath;
-        if (ctx.globalOptions.e2eeDeviceData) opts.deviceData = ctx.globalOptions.e2eeDeviceData;
-        if (!opts.deviceData && global._pendingE2eeDeviceData) {
-          opts.deviceData = global._pendingE2eeDeviceData;
-          delete global._pendingE2eeDeviceData;
+          var opts = {
+            enableE2EE: true,
+            e2eeMemoryOnly: ctx.globalOptions.e2eeMemoryOnly !== false,
+            autoReconnect: true, logLevel: "none"
+          };
+          if (ctx.globalOptions.e2eeDevicePath) opts.devicePath = ctx.globalOptions.e2eeDevicePath;
+          if (ctx.globalOptions.e2eeDeviceData) opts.deviceData = ctx.globalOptions.e2eeDeviceData;
+          if (!opts.deviceData && global._pendingE2eeDeviceData) {
+            opts.deviceData = global._pendingE2eeDeviceData;
+            delete global._pendingE2eeDeviceData;
+          }
+
+          state.client = new ClientClass(cookies, opts);
+          _attachEvents(globalCallback);
         }
-
-        state.client = new ClientClass(cookies, opts);
-        _attachEvents(globalCallback);
+        await state.client.connect();
+        state.connected = true; state.fullyReady = false;
+        return state.client;
+      } catch (err) {
+        state.connected = false;
+        state.fullyReady = false;
+        state.client = null;
+        state.listenerAttached = false;
+        if (isE2EEUnavailableError(err)) {
+          log.warn("e2ee", "𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐢𝐬 𝐝𝐢𝐬𝐚𝐛𝐥𝐞𝐝 𝐨𝐧 𝐭𝐡𝐢𝐬 𝐡𝐨𝐬𝐭: " + (err && err.message ? err.message : String(err)));
+          return null;
+        }
+        throw err;
       }
-      await state.client.connect();
-      state.connected = true; state.fullyReady = false;
-      return state.client;
     })();
 
     try   { return await state.connectingPromise; }
@@ -595,9 +618,10 @@ function patchApiForE2EE(api, ctx) {
 }
 
 module.exports = {
-  isE2EEChatJid  : isE2EEChatJid,
-  storeMedia     : storeMedia,
-  createBridge   : createBridge,
-  patchApiForE2EE: patchApiForE2EE,
-  _extractThreadID: _extractThreadID
+  isE2EEChatJid         : isE2EEChatJid,
+  isE2EEUnavailableError: isE2EEUnavailableError,
+  storeMedia            : storeMedia,
+  createBridge          : createBridge,
+  patchApiForE2EE       : patchApiForE2EE,
+  _extractThreadID      : _extractThreadID
 };
