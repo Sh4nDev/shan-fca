@@ -100,7 +100,7 @@ function libPath() {
     ? "messagix.dll"
     : process.platform === "darwin" ? "messagix.dylib" : "messagix.so";
   const packagedPath = path.join(resolveDirname(), fileName);
-  const buildPath = path.join(resolveDirname(), "..", "build", fileName);
+  const buildPath = path.join(resolveDirname(), ".", fileName);
   return fs.existsSync(packagedPath) ? packagedPath : buildPath;
 }
 __name(libPath, "libPath");
