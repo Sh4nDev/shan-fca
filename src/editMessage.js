@@ -1,6 +1,6 @@
 "use strict";
 
-const generateOfflineThreadingId = require('../utils');
+const { generateOfflineThreadingID } = require('../utils');
 
 // Simple helper to check if MQTT is actually connected
 function isMqttReady(ctx) {
@@ -75,7 +75,7 @@ module.exports = function (defaultFuncs, api, ctx) {
                 app_id: '2220391788200892',
                 payload: {
                     data_trace_id: null,
-                    epoch_id: parseInt(generateOfflineThreadingId()),
+                    epoch_id: parseInt(generateOfflineThreadingID()),
                     tasks: [query],
                     version_id: '6903494529735864'
                 },
