@@ -323,19 +323,70 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
     var mqttClient = ctx.mqttClient;
 
+    // ---- Reconnect bookkeeping (FIX) ----
+    var reconnectAttempts = 0;
+    var reconnectTimer = null;
+    var manuallyStopped = false;
+    var MAX_RECONNECT_ATTEMPTS = ctx.globalOptions.maxReconnectAttempts || 50;
+
+    function scheduleReconnect(reason) {
+        if (manuallyStopped) return;
+        if (!ctx.globalOptions.autoReconnect) return;
+        if (reconnectTimer) return;
+
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            log.error("listenMqtt", "Max reconnect attempts reached (" + MAX_RECONNECT_ATTEMPTS + "). Giving up.");
+            globalCallback({ type: "stop_listen", error: "Max reconnect attempts reached" }, null);
+            return;
+        }
+
+        reconnectAttempts++;
+        var base = Math.min(30000, 1000 * Math.pow(2, Math.min(reconnectAttempts, 5)));
+        var delay = base + Math.floor(Math.random() * 1000);
+
+        log.warn("listenMqtt", "Reconnect #" + reconnectAttempts + " in " + delay + "ms (" + reason + ")");
+
+        reconnectTimer = setTimeout(function () {
+            reconnectTimer = null;
+            try {
+                if (ctx.mqttClient) {
+                    try { ctx.mqttClient.removeAllListeners(); } catch (_) { }
+                    try { ctx.mqttClient.end(true); } catch (_) { }
+                }
+            } catch (_) { }
+            ctx.mqttClient = undefined;
+            getSeqID();
+        }, delay);
+    }
+
     mqttClient.on('error', function (err) {
         stopMqttSpinner();
-        log.error("listenMqtt", err);
-        mqttClient.end();
-        if (ctx.globalOptions.autoReconnect) getSeqID();
-        else globalCallback({ type: "stop_listen", error: "Connection refused: Server unavailable" }, null);
+        log.error("listenMqtt", "mqtt error:", err && err.message ? err.message : err);
+        try { mqttClient.end(true); } catch (_) { }
+        ctx.mqttClient = undefined;
+        scheduleReconnect("error");
     });
 
-    mqttClient.on('close', function () { });
-    mqttClient.on('offline', function () { });
-    mqttClient.on('reconnect', function () { });
+    // FIX: this handler was empty before, causing permanent disconnect
+    mqttClient.on('close', function () {
+        if (manuallyStopped) return;
+        log.warn("listenMqtt", "mqtt closed unexpectedly");
+        ctx.mqttClient = undefined;
+        scheduleReconnect("close");
+    });
+
+    mqttClient.on('offline', function () {
+        if (manuallyStopped) return;
+        log.warn("listenMqtt", "mqtt went offline");
+    });
+
+    mqttClient.on('reconnect', function () {
+        log.info("listenMqtt", "mqtt reconnecting…");
+    });
 
     mqttClient.on('connect', function () {
+        reconnectAttempts = 0;
+
         topics.forEach(function (topic) { mqttClient.subscribe(topic); });
 
         printMqttBanner(ctx.region, ctx.globalOptions.autoReconnect);
@@ -362,8 +413,10 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
         mqttClient.publish(topic, JSON.stringify(queue), { qos: 1, retain: false });
 
         var rTimeout = setTimeout(function () {
-            mqttClient.end();
-            getSeqID();
+            log.warn("listenMqtt", "no /t_ms within 5s — reconnecting");
+            try { mqttClient.end(true); } catch (_) { }
+            ctx.mqttClient = undefined;
+            scheduleReconnect("tms timeout");
         }, 5000);
 
         ctx.tmsWait = function () {
@@ -403,6 +456,9 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
                 parseDelta(defaultFuncs, api, ctx, globalCallback, { "delta": delta });
             }
         } else if (topic === "/thread_typing" || topic === "/orca_typing_notifications") {
+            // FIX: only emit typing events when autoMarkRead is enabled
+            if (!ctx.globalOptions.autoMarkRead) return;
+
             var typ = {
                 type: "typ",
                 isTyping: !!jsonMessage.state,
@@ -426,7 +482,10 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
         }
     });
 
-    mqttClient.on('close', function () { });
+    ctx._cancelMqttReconnect = function () {
+        manuallyStopped = true;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
 }
 
 function attachImageUrlToAttachment(api, attachment) {
@@ -773,6 +832,7 @@ function markMessageStatus(ctx, api, threadID, messageID) {
                 if (err) log.error("markAsDelivered", err);
             });
         }
+        // FIX: only mark as read when autoMarkRead is enabled
         if (ctx.globalOptions.autoMarkRead) {
             api.markAsRead(threadID, function (err) {
                 if (err) log.error("markAsRead", err);
@@ -810,6 +870,12 @@ module.exports = function (defaultFuncs, api, ctx) {
             stopListening(callback) {
                 callback = callback || (function () { });
                 globalCallback = identity;
+
+                // FIX: cancel any pending reconnect
+                if (typeof ctx._cancelMqttReconnect === "function") {
+                    ctx._cancelMqttReconnect();
+                }
+
                 if (ctx.mqttClient) {
                     ctx.mqttClient.unsubscribe("/webrtc");
                     ctx.mqttClient.unsubscribe("/rtc_multi");
