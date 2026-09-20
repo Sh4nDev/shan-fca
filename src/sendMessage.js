@@ -82,7 +82,11 @@ function publishLsRequestWithAck(mqttClient, content, requestId, timeout) {
     return new Promise(function (resolve, reject) {
         var timer = setTimeout(function () {
             mqttClient.removeListener('message', onMessage);
-            reject(new Error('MQTT sendMessage timed out'));
+            var timeoutError = new Error('MQTT sendMessage timed out');
+            // Tagged so the caller can tell "publish failed" (safe to retry through
+            // another transport) apart from "published, ack lost" (do NOT re-send).
+            timeoutError.code = 'MQTT_ACK_TIMEOUT';
+            reject(timeoutError);
         }, timeout);
 
         function onMessage(topic, message) {
@@ -126,7 +130,8 @@ module.exports = function (defaultFuncs, api, ctx) {
         var mqttClient = ctx.mqttClient || global.mqttClient;
         if (!mqttClient) throw new Error('MQTT client not available');
 
-        var baseBody = msg.body != null ? String(msg.body) : "";
+        var baseBody = msg.body != null ? String(msg.body)
+            : (msg.text != null ? String(msg.text) : "");
         var requestId = Math.floor(100 + Math.random() * 900);
         var epoch = (BigInt(Date.now()) << 22n).toString();
 
@@ -145,6 +150,18 @@ module.exports = function (defaultFuncs, api, ctx) {
             metadata_dataclass: JSON.stringify({ media_accessibility_metadata: { alt_text: null } })
         };
 
+        var hasMedia = !!(msg.attachment || msg.sticker || msg.emoji ||
+            (msg.location && msg.location.latitude != null && msg.location.longitude != null));
+
+        // A payload with text: null, send_type: 1 and no media at all is stored as
+        // a contentless message and Messenger renders it as
+        // "This message isn't available on this app version." - never send one.
+        if (baseBody === "" && !hasMedia) {
+            log.warn("sendMessage", "Empty body and no attachment/sticker/emoji - sending a zero-width space instead of a contentless message.");
+            baseBody = "\u200b";
+            payload0.text = baseBody;
+        }
+
         var mentionData = buildMentionData(msg, baseBody);
         if (mentionData) payload0.mention_data = mentionData;
 
@@ -156,7 +173,10 @@ module.exports = function (defaultFuncs, api, ctx) {
         if (msg.emoji) {
             payload0.send_type = 1;
             payload0.text = msg.emoji;
-            payload0.hot_emoji_size = toEmojiSize(msg.emojiSize);
+            // Only send hot_emoji_size when the caller really asked for a size:
+            // the field switches the client into "big emoji" rendering, so sending
+            // it with an implicit value made some clients fail to render the bubble.
+            if (msg.emojiSize != null) payload0.hot_emoji_size = toEmojiSize(msg.emojiSize);
         }
 
         if (msg.location && msg.location.latitude != null && msg.location.longitude != null) {
@@ -169,12 +189,18 @@ module.exports = function (defaultFuncs, api, ctx) {
         }
 
         var effectiveReplyTo = replyToMessage || msg.replyToMessage;
-        if (effectiveReplyTo) {
+        // A reply whose source message the client cannot resolve is rendered as an
+        // unreadable/broken bubble, so only send well formed message ids.
+        var replyId = effectiveReplyTo != null && !Array.isArray(effectiveReplyTo)
+            ? String(effectiveReplyTo) : "";
+        if (replyId && /^[A-Za-z0-9:._$-]{4,}$/.test(replyId)) {
             payload0.reply_metadata = {
-                reply_source_id: effectiveReplyTo,
+                reply_source_id: replyId,
                 reply_source_type: 1,
                 reply_type: 0
             };
+        } else if (replyId) {
+            log.warn("sendMessage", "Ignoring invalid replyToMessage id: " + JSON.stringify(replyId));
         }
 
         if (msg.attachment) {
@@ -376,10 +402,22 @@ module.exports = function (defaultFuncs, api, ctx) {
             if (typeof callback === "function") callback(null, result);
             return result;
         } catch (mqttErr) {
-            log.warn("sendMessage", "MQTT send failed, falling back to HTTP: " + (mqttErr && mqttErr.message));
             if (enableTypingIndicator) {
                 api.sendTypingIndicator(false, threadID, function () { }).catch(function () { });
             }
+
+            // The publish succeeded but the ack never arrived: the message is
+            // normally delivered anyway, so re-sending it through the legacy HTTP
+            // API only produced duplicates (and the legacy format is what clients
+            // show as "This message isn't available on this app version.").
+            if (mqttErr && mqttErr.code === 'MQTT_ACK_TIMEOUT') {
+                log.warn("sendMessage", "MQTT ack timed out after publish - not re-sending (avoids duplicate / legacy copies).");
+                var timeoutResult = { threadID: threadID, messageID: null, ackTimeout: true };
+                if (typeof callback === "function") callback(null, timeoutResult);
+                return timeoutResult;
+            }
+
+            log.warn("sendMessage", "MQTT send failed, falling back to HTTP: " + (mqttErr && mqttErr.message));
             return api.OldMessage(msg, threadID, callback, replyToMessage, isSingleUser);
         }
     };

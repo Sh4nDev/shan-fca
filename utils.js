@@ -786,8 +786,24 @@ function formatAttachment(attachments, attachmentIds, attachmentMap, shareMap) {
  */
 
 function formatDeltaMessage(m) {
-    var md = m.delta.messageMetadata;
-    var body = m.delta.body || "";
+    // Coerce any text carrier to a real string. delta.body is not always a
+    // string (and is sometimes missing altogether, e.g. mentions/emoji only
+    // messages) - using it raw made body.substring() throw, so the whole
+    // message event was replaced by a parse_error and the bot never received
+    // the user's command.
+    function _messageText(value) {
+        if (value == null) return "";
+        if (typeof value === "string") return value;
+        if (typeof value === "number" || typeof value === "boolean") return String(value);
+        if (Array.isArray(value)) return value.map(_messageText).join("");
+        if (value.text != null) return _messageText(value.text);
+        return "";
+    }
+
+    var md = m.delta.messageMetadata || {};
+    var body = _messageText(m.delta.body);
+    if (!body && m.delta.text != null) body = _messageText(m.delta.text);
+    if (!body && md.adminText != null) body = _messageText(md.adminText);
     var args = body == "" ? [] : body.trim().split(/\s+/);
     var mentions = {};
     var mdata = [];
@@ -824,14 +840,15 @@ function formatDeltaMessage(m) {
     }
 
     // Determine if this is a DM or group
-    const otherUserFbId = md.threadKey.otherUserFbId;
-    const threadFbId = md.threadKey.threadFbId;
+    const threadKey = md.threadKey || {};
+    const otherUserFbId = threadKey.otherUserFbId;
+    const threadFbId = threadKey.threadFbId;
     const isSingleUser = !!otherUserFbId && !threadFbId;
 
     return {
         type: "message",
-        senderID: formatID(md.actorFbId.toString()),
-        threadID: formatID((threadFbId || otherUserFbId).toString()),
+        senderID: md.actorFbId != null ? formatID(String(md.actorFbId)) : "",
+        threadID: (threadFbId || otherUserFbId) != null ? formatID(String(threadFbId || otherUserFbId)) : "",
         messageID: md.messageId,
         args: args,
         body: body,
@@ -2840,11 +2857,53 @@ function decodeClientPayload(payload) {
                     char3 = array[i++];
                     out += String.fromCharCode(((c & 0x0F) << 12) | ((char2 & 0x3F) << 6) | ((char3 & 0x3F) << 0));
                     break;
+                default: {
+                    // 4 byte UTF-8 sequence (emoji / every symbol above U+FFFF).
+                    // Without this branch the bytes were dropped or turned into
+                    // garbage, JSON.parse() below threw and the whole /t_ms delta
+                    // batch - including the user's new text message - was lost.
+                    char2 = array[i++];
+                    char3 = array[i++];
+                    var char4 = array[i++];
+                    var codePoint = ((c & 0x07) << 18) | ((char2 & 0x3F) << 12) | ((char3 & 0x3F) << 6) | (char4 & 0x3F);
+                    codePoint -= 0x10000;
+                    out += String.fromCharCode(0xD800 + (codePoint >> 10), 0xDC00 + (codePoint & 0x3FF));
+                    break;
+                }
             }
         }
         return out;
     }
-    return JSON.parse(Utf8ArrayToStr(payload));
+
+    try {
+        if (payload == null) return null;
+
+        // Node Buffer
+        if (Buffer.isBuffer(payload)) payload = Array.prototype.slice.call(payload);
+
+        // Already decoded JSON (newer clients send the payload as a JSON string)
+        if (typeof payload === "string") {
+            var raw = payload.trim();
+            if (!raw) return null;
+            if (raw.charAt(0) === "{" || raw.charAt(0) === "[") return JSON.parse(raw);
+            return JSON.parse(Utf8ArrayToStr(Array.prototype.slice.call(Buffer.from(raw, "base64"))));
+        }
+
+        // Bytes disguised as a base64 string inside an array/object
+        if (payload && typeof payload === "object" && typeof payload.length === "number") {
+            var decoded = Utf8ArrayToStr(Array.prototype.slice.call(payload));
+            var text = String(decoded).trim();
+            if (text.charAt(0) === "{" || text.charAt(0) === "[") return JSON.parse(text);
+            return JSON.parse(Utf8ArrayToStr(Array.prototype.slice.call(Buffer.from(text, "base64"))));
+        }
+
+        if (typeof payload === "object") return payload;
+    } catch (e) {
+        // Never throw: one undecodable delta must not abort the remaining deltas
+        // of the same batch (that is what caused missing / partial message bodies).
+        log.warn("decodeClientPayload", "Failed to decode client payload: " + (e && e.message ? e.message : e));
+    }
+    return null;
 }
 
 /**

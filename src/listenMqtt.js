@@ -453,7 +453,14 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
             for (var i in jsonMessage.deltas) {
                 var delta = jsonMessage.deltas[i];
-                parseDelta(defaultFuncs, api, ctx, globalCallback, { "delta": delta });
+                try {
+                    parseDelta(defaultFuncs, api, ctx, globalCallback, { "delta": delta });
+                } catch (deltaError) {
+                    // One malformed delta must never swallow the rest of the batch
+                    // (and must never crash the whole listener).
+                    log.error("listenMqtt", "Failed to parse delta (class=" + (delta && delta.class) + "): " +
+                        (deltaError && deltaError.message ? deltaError.message : deltaError));
+                }
             }
         } else if (topic === "/thread_typing" || topic === "/orca_typing_notifications") {
             // FIX: only emit typing events when autoMarkRead is enabled
@@ -498,6 +505,21 @@ function attachImageUrlToAttachment(api, attachment) {
 }
 
 function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
+    // Guard every JSON payload read with this helper: an unguarded JSON.parse()
+    // (prng / mercuryJSON / client payload) throws out of parseDelta and the
+    // /t_ms loop stops, so all deltas that came after it - usually the user's
+    // new message - are silently dropped and the bot answers with a stale or
+    // partial body.
+    function safeJsonParse(value, fallback) {
+        if (value == null) return fallback;
+        if (typeof value !== "string") return value;
+        try { return JSON.parse(value); } catch (e) { return fallback; }
+    }
+
+    function asArray(value) {
+        return Array.isArray(value) ? value : [];
+    }
+
     if (v.delta.class == "NewMessage") {
         if (ctx.globalOptions.pageID && ctx.globalOptions.pageID != v.queue) return;
 
@@ -526,7 +548,7 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                     undefined :
                     (function () { globalCallback(null, fmtMsg); })();
             } else {
-                if (v.delta.attachments[i].mercury.attach_type == "photo") {
+                if (((v.delta.attachments[i] || {}).mercury || {}).attach_type == "photo") {
                     api.resolvePhotoUrl(v.delta.attachments[i].fbid, function (err, url) {
                         if (!err) v.delta.attachments[i].mercury.metadata.url = url;
                         return resolveAttachmentUrl(i + 1);
@@ -540,7 +562,7 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
 
     if (v.delta.class == "ClientPayload") {
         var clientPayload = utils.decodeClientPayload(v.delta.payload);
-        if (clientPayload && clientPayload.deltas) {
+        if (clientPayload && clientPayload.deltas && typeof clientPayload.deltas === "object") {
             for (var i in clientPayload.deltas) {
                 var delta = clientPayload.deltas[i];
                 if (delta.deltaMessageReaction && !!ctx.globalOptions.listenEvents) {
@@ -566,23 +588,25 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                         });
                     })();
                 } else if (delta.deltaMessageReply) {
-                    var mdata = delta.deltaMessageReply.message === undefined ? [] :
-                        delta.deltaMessageReply.message.data === undefined ? [] :
-                            delta.deltaMessageReply.message.data.prng === undefined ? [] :
-                                JSON.parse(delta.deltaMessageReply.message.data.prng);
+                    var _repMsg = delta.deltaMessageReply.message || {};
+                    var _repMd = _repMsg.messageMetadata || {};
+                    var _repKey = _repMd.threadKey || {};
+                    var _repBody = String(_repMsg.body != null ? _repMsg.body
+                        : (_repMd.adminText != null ? _repMd.adminText : ""));
+                    var mdata = asArray(safeJsonParse(_repMsg.data && _repMsg.data.prng, []));
                     var m_id = mdata.map(function (u) { return u.i; });
                     var m_offset = mdata.map(function (u) { return u.o; });
                     var m_length = mdata.map(function (u) { return u.l; });
                     var mentions = {};
-                    for (var i = 0; i < m_id.length; i++) mentions[m_id[i]] = (delta.deltaMessageReply.message.body || "").substring(m_offset[i], m_offset[i] + m_length[i]);
+                    for (var i = 0; i < m_id.length; i++) mentions[m_id[i]] = _repBody.substring(m_offset[i], m_offset[i] + m_length[i]);
 
                     var callbackToReturn = {
                         type: "message_reply",
-                        threadID: (delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId ? delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId : delta.deltaMessageReply.message.messageMetadata.threadKey.otherUserFbId).toString(),
-                        messageID: delta.deltaMessageReply.message.messageMetadata.messageId,
-                        senderID: delta.deltaMessageReply.message.messageMetadata.actorFbId.toString(),
-                        attachments: (delta.deltaMessageReply.message.attachments || []).map(function (att) {
-                            var mercury = JSON.parse(att.mercuryJSON);
+                        threadID: String(_repKey.threadFbId || _repKey.otherUserFbId || ""),
+                        messageID: _repMd.messageId,
+                        senderID: _repMd.actorFbId != null ? String(_repMd.actorFbId) : "",
+                        attachments: asArray(_repMsg.attachments).map(function (att) {
+                            var mercury = safeJsonParse(att && att.mercuryJSON, {}) || {};
                             Object.assign(att, mercury);
                             return att;
                         }).map(function (att) {
@@ -591,12 +615,12 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                             catch (ex) { x = att; x.error = ex; x.type = "unknown"; }
                             return x;
                         }),
-                        args: (delta.deltaMessageReply.message.body || "").trim().split(/\s+/),
-                        body: (delta.deltaMessageReply.message.body || ""),
-                        isGroup: !!delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId,
+                        args: _repBody.trim().split(/\s+/),
+                        body: _repBody,
+                        isGroup: !!_repKey.threadFbId,
                         mentions: mentions,
-                        timestamp: delta.deltaMessageReply.message.messageMetadata.timestamp,
-                        participantIDs: (delta.deltaMessageReply.message.messageMetadata.cid.canonicalParticipantFbids || delta.deltaMessageReply.message.participants || []).map(function (e) { return e.toString(); })
+                        timestamp: _repMd.timestamp,
+                        participantIDs: asArray((_repMd.cid || {}).canonicalParticipantFbids || _repMsg.participants).map(function (e) { return String(e); })
                     };
 
                     if (callbackToReturn.attachments && Array.isArray(callbackToReturn.attachments)) {
@@ -604,22 +628,24 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                     }
 
                     if (delta.deltaMessageReply.repliedToMessage) {
-                        mdata = delta.deltaMessageReply.repliedToMessage === undefined ? [] :
-                            delta.deltaMessageReply.repliedToMessage.data === undefined ? [] :
-                                delta.deltaMessageReply.repliedToMessage.data.prng === undefined ? [] :
-                                    JSON.parse(delta.deltaMessageReply.repliedToMessage.data.prng);
+                        var _repToMsg = delta.deltaMessageReply.repliedToMessage || {};
+                        var _repToMd = _repToMsg.messageMetadata || {};
+                        var _repToKey = _repToMd.threadKey || {};
+                        var _repToBody = String(_repToMsg.body != null ? _repToMsg.body
+                            : (_repToMd.adminText != null ? _repToMd.adminText : ""));
+                        mdata = asArray(safeJsonParse(_repToMsg.data && _repToMsg.data.prng, []));
                         m_id = mdata.map(function (u) { return u.i; });
                         m_offset = mdata.map(function (u) { return u.o; });
                         m_length = mdata.map(function (u) { return u.l; });
                         var rmentions = {};
-                        for (var i = 0; i < m_id.length; i++) rmentions[m_id[i]] = (delta.deltaMessageReply.repliedToMessage.body || "").substring(m_offset[i], m_offset[i] + m_length[i]);
+                        for (var i = 0; i < m_id.length; i++) rmentions[m_id[i]] = _repToBody.substring(m_offset[i], m_offset[i] + m_length[i]);
 
                         callbackToReturn.messageReply = {
-                            threadID: (delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId ? delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId : delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.otherUserFbId).toString(),
-                            messageID: delta.deltaMessageReply.repliedToMessage.messageMetadata.messageId,
-                            senderID: delta.deltaMessageReply.repliedToMessage.messageMetadata.actorFbId.toString(),
-                            attachments: delta.deltaMessageReply.repliedToMessage.attachments.map(function (att) {
-                                var mercury = JSON.parse(att.mercuryJSON);
+                            threadID: String(_repToKey.threadFbId || _repToKey.otherUserFbId || callbackToReturn.threadID || ""),
+                            messageID: _repToMd.messageId,
+                            senderID: _repToMd.actorFbId != null ? String(_repToMd.actorFbId) : "",
+                            attachments: asArray(_repToMsg.attachments).map(function (att) {
+                                var mercury = safeJsonParse(att && att.mercuryJSON, {}) || {};
                                 Object.assign(att, mercury);
                                 return att;
                             }).map(function (att) {
@@ -629,11 +655,11 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                                 attachImageUrlToAttachment(api, x);
                                 return x;
                             }),
-                            args: (delta.deltaMessageReply.repliedToMessage.body || "").trim().split(/\s+/),
-                            body: delta.deltaMessageReply.repliedToMessage.body || "",
-                            isGroup: !!delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId,
+                            args: _repToBody.trim().split(/\s+/),
+                            body: _repToBody,
+                            isGroup: !!_repToKey.threadFbId,
                             mentions: rmentions,
-                            timestamp: delta.deltaMessageReply.repliedToMessage.messageMetadata.timestamp
+                            timestamp: _repToMd.timestamp
                         };
                     } else if (delta.deltaMessageReply.replyToMessageId) {
                         return defaultFuncs
