@@ -372,7 +372,9 @@ async function uploadImageToImgbb(image, expiration = 600) {
     // E2EE attachment helpers -------------------------------------------------
     function _detectE2EEMediaType(att) {
         var name = "";
-        if (att && typeof att.path === "string") name = att.path;
+        if (att && typeof att === "string") name = att.split("?")[0];
+        else if (att && typeof att.url === "string") name = att.url.split("?")[0];
+        else if (att && typeof att.path === "string") name = String(att.path).split("?")[0];
         else if (att && typeof att.filename === "string") name = att.filename;
         else if (att && typeof att.name === "string") name = att.name;
         var ext = String(name).split(".").pop().toLowerCase();
@@ -403,10 +405,27 @@ async function uploadImageToImgbb(image, expiration = 600) {
             });
         }
         return Promise.resolve(null);
+        }
+
+        // Register thread→JID and message→JID mappings after a successful E2EE send,
+    // so subsequent sends to the same thread resolve the JID without needing a
+    // prior inbound message (which is what caused E2EE threads to fall back to
+    // the legacy transport and render as "This message isn't available on this
+    // app version.").
+    function _regE2eeSndResult(result, jid, threadID) {
+      if (!result || !result.messageId) return;
+      var _e2 = require('./e2ee');
+      var tid = String(threadID);
+      global._e2eeThreadMap  = global._e2eeThreadMap  || new Map();
+      global._e2eeMessageMap = global._e2eeMessageMap || new Map();
+            var threadNum = (_e2._extractThreadID(tid)) || tid;
+      global._e2eeThreadMap.set(threadNum, String(jid));
+      global._e2eeMessageMap.set(String(result.messageId), threadNum);
+      global._e2eeMessageMap.set(String(result.messageId) + "_jid", String(jid));
     }
 
     const originalSendMessage = api.sendMessage;
-    
+
     api.sendMessage = async function(msg, threadID, callback, replyToMessage, isSingleUser) {
         // Support the GoatBot style call api.sendMessage(msg, threadID, messageID)
         if (typeof callback === "string") {
@@ -436,40 +455,83 @@ async function uploadImageToImgbb(image, expiration = 600) {
 
             if (_e2eeMod.isE2EEChatJid(String(threadID))) {
                 e2eeJid = String(threadID);
-            } else if (global._e2eeMessageMap && typeof global._e2eeMessageMap.get === "function") {
-                var mappedJid = global._e2eeMessageMap.get(String(threadID) + "_jid");
-                if (mappedJid && _e2eeMod.isE2EEChatJid(mappedJid)) e2eeJid = mappedJid;
+            } else {
+                // Resolve the numeric thread id -> E2EE chat jid. The old code
+                // only looked up message ids, so E2EE chats were almost never
+                // detected here and replies went out through the legacy MQTT
+                // transport - which clients render as
+                // "This message isn't available on this app version.".
+                e2eeJid = _e2eeMod.getE2EEJidForThread(threadID);
             }
 
-            if (e2eeJid) {
+                        if (e2eeJid) {
                 var bridge = _e2eeMod.createBridge(ctx);
-                var body = typeof normalized === "object" ? String(normalized.body || "") : String(normalized || "");
+                var body = typeof normalized === "object"
+                    ? String(normalized.body != null ? normalized.body : (normalized.text != null ? normalized.text : ""))
+                    : String(normalized != null ? normalized : "");
                 var attachments = (normalized && typeof normalized === "object" && normalized.attachment)
                     ? (Array.isArray(normalized.attachment) ? normalized.attachment : [normalized.attachment])
                     : [];
                 var result = null;
+                var sentAny = false;
+
+                // Look up the sender JID of the message we are replying to, so the
+                // E2EE reply bubbles correctly point at the original sender.
+                var replySenderJid = null;
+                if (replyId && global._e2eeSenderJidMap) {
+                    replySenderJid = global._e2eeSenderJidMap.get(String(replyId)) || null;
+                }
 
                 if (attachments.length) {
                     // The attachment used to be dropped here, so the recipient got a
                     // text-only (or completely empty) message - which clients render
                     // as "This message isn't available on this app version.".
                     for (var a = 0; a < attachments.length; a++) {
-                        var media = await _attachmentToBuffer(attachments[a]);
-                        if (!media) {
-                            log.warn("sendMessage", "Unsupported E2EE attachment (expected readable stream, Buffer or base64) - skipping it.");
+                        var att = attachments[a];
+                        var media = null;
+                        if (Buffer.isBuffer(att) || utils.isReadableStream(att) || Array.isArray(att)) {
+                            media = await _attachmentToBuffer(att);
+                        } else if (typeof att === "string") {
+                            // http(s) URL or local file path (e.g. an image url)
+                            media = await _e2eeMod.fetchUrlAsBuffer(att);
+                        } else if (att && (att.url || att.path)) {
+                            media = await _e2eeMod.fetchUrlAsBuffer(att.url || att.path);
+                        } else {
+                            media = await _attachmentToBuffer(att);
+                        }
+                        if (!media || !media.length) {
+                            log.warn("sendMessage", "Unsupported E2EE attachment (expected readable stream, Buffer, base64 or url) - skipping it.");
                             continue;
                         }
-                        result = await bridge.sendMedia(e2eeJid, _detectE2EEMediaType(attachments[a]), media, {
+                        result = await bridge.sendMedia(e2eeJid, _detectE2EEMediaType(att), media, {
                             caption: a === 0 ? body : "",
-                            filename: attachments[a] && attachments[a].filename ? String(attachments[a].filename) : undefined,
-                            mimeType: attachments[a] && attachments[a].mimeType ? String(attachments[a].mimeType) : undefined,
-                            replyToId: replyId
+                            filename: att && att.filename ? String(att.filename) : undefined,
+                            mimeType: att && att.mimeType ? String(att.mimeType) : undefined,
+                            replyToId: replyId,
+                            replyToSenderJid: replySenderJid || undefined
                         });
+                        sentAny = true;
+                        // Register thread/JID mapping so future sends to this E2EE
+                        // thread are routed correctly.
+                        _regE2eeSndResult(result, e2eeJid, String(threadID));
                     }
                 }
 
-                if (!result) {
-                    result = await bridge.sendMessage(e2eeJid, body, { replyToId: replyId });
+                if (!sentAny) {
+                    // Never fall back to an empty body - it renders as an empty
+                    // bubble in the E2EE chat. Refuse instead.
+                    if (body === "" || body == null) {
+                        var emptyErr = new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: refusing to send an empty E2EE message (no body, no usable attachment).");
+                        emptyErr.code = "EMPTY_MESSAGE";
+                        throw emptyErr;
+                    }
+                    result = await bridge.sendMessage(e2eeJid, body, {
+                        replyToId: replyId,
+                        replyToSenderJid: replySenderJid || undefined
+                    });
+                    // Register thread/JID mapping so future sends to this E2EE
+                    // thread are routed correctly.
+                    _regE2eeSndResult(result, e2eeJid, String(threadID));
                 }
 
                 if (typeof callback === "function") callback(null, result);
@@ -484,15 +546,19 @@ async function uploadImageToImgbb(image, expiration = 600) {
             // Argument errors must be reported to the caller instead of being
             // re-sent through the legacy API (that produced duplicate bubbles in a
             // format new clients cannot render).
-            if (/Disallowed props|should be of type|is required|Pass a threadID/i.test(reason)) {
+            if (/Disallowed props|should be of type|is required|Pass a threadID/i.test(reason) || error.code === "EMPTY_MESSAGE") {
                 if (typeof callback === "function") callback(error);
                 throw error;
             }
 
-            // The legacy API cannot address an E2EE chat, so retry on MQTT instead.
+            // The legacy API cannot address an E2EE chat - re-sending an
+            // unencrypted message into an encrypted thread is what clients
+            // render as "This message isn't available on this app version.",
+            // so surface the error instead of falling back.
             if (e2eeJid) {
-                console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐬𝐞𝐧𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐢𝐥𝐞𝐝, 𝐫𝐞𝐭𝐫𝐲𝐢𝐧𝐠 𝐨𝐧 𝐌𝐐𝐓𝐓:', reason);
-                return originalSendMessage(normalized, threadID, callback, replyId, isSingleUser);
+                console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐄2𝐄𝐄 𝐬𝐞𝐧𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐢𝐥𝐞𝐝:', reason);
+                if (typeof callback === "function") callback(error);
+                throw error;
             }
 
             console.log('𝐬𝐡𝐚𝐧-𝐟𝐜𝐚 𝐬𝐞𝐧𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐢𝐥𝐞𝐝, 𝐮𝐬𝐢𝐧𝐠 𝐎𝐥𝐝𝐌𝐞𝐬𝐬𝐚𝐠𝐞 𝐟𝐚𝐥𝐥𝐛𝐚𝐜𝐤:', reason);

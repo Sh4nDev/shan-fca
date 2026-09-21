@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 /**
  * shan-fca regression tests.
@@ -164,10 +164,13 @@ const validMessageDelta = {
     const delivered = [];
 
     ctx.mqttClient = new FakeMqtt();
-    await sendMessage("", "12345", function () { });
-    const emptyTask = taskOf(ctx.mqttClient);
-    check("an empty message is sent with a renderable body (never text: null)",
-        emptyTask.text === "\u200b", JSON.stringify(emptyTask));
+    let emptyResult = null;
+    try {
+        emptyResult = await sendMessage("", "12345", function () { });
+    } catch (e) { emptyResult = e; }
+    check("an empty message is refused (EMPTY_MESSAGE error or emptyMessage result) instead of sending a broken bubble",
+        emptyResult && (emptyResult.code === "EMPTY_MESSAGE" || emptyResult.emptyMessage === true),
+        JSON.stringify(emptyResult));
 
     ctx.mqttClient = new FakeMqtt();
     await sendMessage("(help", "12345", function () { }, "not a real id");

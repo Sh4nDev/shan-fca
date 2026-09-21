@@ -153,13 +153,14 @@ module.exports = function (defaultFuncs, api, ctx) {
         var hasMedia = !!(msg.attachment || msg.sticker || msg.emoji ||
             (msg.location && msg.location.latitude != null && msg.location.longitude != null));
 
-        // A payload with text: null, send_type: 1 and no media at all is stored as
-        // a contentless message and Messenger renders it as
-        // "This message isn't available on this app version." - never send one.
+        // A payload with text: null, send_type: 1 and no media at all used to
+        // be patched with a zero-width space, but Messenger renders that as an
+        // EMPTY bubble (and empty replies from the bot look broken). Never send
+        // a contentless message: report it to the caller instead.
         if (baseBody === "" && !hasMedia) {
-            log.warn("sendMessage", "Empty body and no attachment/sticker/emoji - sending a zero-width space instead of a contentless message.");
-            baseBody = "\u200b";
-            payload0.text = baseBody;
+            var emptyErr = new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: refusing to send an empty message (no body, no attachment/sticker/emoji/location).");
+            emptyErr.code = "EMPTY_MESSAGE";
+            throw emptyErr;
         }
 
         var mentionData = buildMentionData(msg, baseBody);
@@ -287,10 +288,25 @@ module.exports = function (defaultFuncs, api, ctx) {
         }
 
         var _e2eeMod = require('../e2ee');
-        if (_e2eeMod.isE2EEChatJid(String(threadID))) {
+        var _e2eeJid = _e2eeMod.isE2EEChatJid(String(threadID))
+            ? String(threadID)
+            : _e2eeMod.getE2EEJidForThread(threadID);
+        if (_e2eeJid) {
             var _bridge = _e2eeMod.createBridge(ctx);
             var _form   = typeof msg === "string" ? { body: msg } : (msg || {});
-            var _text   = String(_form.body || _form.text || "");
+            var _text   = String(_form.body != null ? _form.body : (_form.text != null ? _form.text : ""));
+                        var _regE2eeSend = function (result, jid, tid) {
+                if (!result || !result.messageId) return;
+                var _tid = String(tid);
+                global._e2eeThreadMap  = global._e2eeThreadMap  || new Map();
+                global._e2eeMessageMap = global._e2eeMessageMap || new Map();
+                global._e2eeBotSentMsgIds = global._e2eeBotSentMsgIds || new Set();
+                var _threadNum = (_e2eeMod._extractThreadID(_tid)) || _tid;
+                global._e2eeThreadMap.set(_threadNum, String(jid));
+                global._e2eeMessageMap.set(String(result.messageId), _threadNum);
+                global._e2eeMessageMap.set(String(result.messageId) + "_jid", String(jid));
+                global._e2eeBotSentMsgIds.add(String(result.messageId));
+            };
             var _atts   = !_form.attachment ? []
                 : (Array.isArray(_form.attachment) ? _form.attachment : [_form.attachment]);
             var _sendOpts = {};
@@ -308,6 +324,11 @@ module.exports = function (defaultFuncs, api, ctx) {
                         var _buf;
                         if (Buffer.isBuffer(_att)) {
                             _buf = _att;
+                        } else if (typeof _att === "string") {
+                            // http(s) URL or local file path - fetch it instead of
+                            // base64-decoding it into garbage (that produced broken
+                            // / unreadable attachment bubbles in E2EE chats).
+                            _buf = await _e2eeMod.fetchUrlAsBuffer(_att);
                         } else if (_att && typeof _att.read === "function") {
                             _buf = await new Promise(function (res, rej) {
                                 var chunks = [];
@@ -315,13 +336,20 @@ module.exports = function (defaultFuncs, api, ctx) {
                                 _att.on("end",  function ()  { res(Buffer.concat(chunks)); });
                                 _att.on("error", rej);
                             });
+                        } else if (_att && (typeof _att.url === "string" || typeof _att.path === "string")) {
+                            // attachment object carrying a url/path (e.g. an image url)
+                            _buf = await _e2eeMod.fetchUrlAsBuffer(_att.url || _att.path);
                         } else if (_att && _att.type === "Buffer" && Array.isArray(_att.data)) {
                             _buf = Buffer.from(_att.data);
                         } else { continue; }
+                        if (!_buf || !_buf.length) continue;
 
                         var _mt = (_att.mediaType ? String(_att.mediaType).toLowerCase() : null)
                             || (function () {
-                                var p = String(_att.path || _att.filename || "").split(".").pop().toLowerCase();
+                                var src = typeof _att === "string" ? _att.split("?")[0]
+                                    : (_att && typeof _att.url === "string") ? _att.url.split("?")[0]
+                                    : String(_att.path || _att.filename || "");
+                                var p = src.split(".").pop().toLowerCase();
                                 if (["jpg","jpeg","png","gif","webp","bmp"].includes(p)) return "image";
                                 if (["mp4","mov","avi","mkv","webm"].includes(p))        return "video";
                                 if (["mp3","ogg","oga","opus","wav","m4a","aac","flac"].includes(p)) return "audio";
@@ -337,18 +365,20 @@ module.exports = function (defaultFuncs, api, ctx) {
                         if (_att.height   != null) _mOpts.height   = Number(_att.height);
                         if (_att.ptt  || _att.voice) _mOpts.ptt = true;
 
-                        var _mRes = await _bridge.sendMedia(threadID, _mt, _buf, _mOpts);
+                        var _mRes = await _bridge.sendMedia(_e2eeJid, _mt, _buf, _mOpts);
                         _last = { threadID: threadID, messageID: _mRes && _mRes.messageId ? String(_mRes.messageId) : undefined, isE2EE: true };
-                        if (_last.messageID) {
-                            global._e2eeMessageMap = global._e2eeMessageMap || new Map();
-                            global._e2eeMessageMap.set(_last.messageID, String(threadID));
-                            global._e2eeBotSentMsgIds = global._e2eeBotSentMsgIds || new Set();
-                            global._e2eeBotSentMsgIds.add(_last.messageID);
-                        }
+                        _regE2eeSend(_last, _e2eeJid, String(threadID));
                     } catch (_me) { log.error("E2EE", "sendMedia att#" + _i + " failed:", _me && _me.message ? _me.message : _me); }
                 }
                 if (!_last || _atts.length === 0) {
-                    var _tRes = await _bridge.sendMessage(threadID, _text || "\u200b", _sendOpts);
+                    // Never send an empty/ZWSP body - it renders as an empty
+                    // bubble in the E2EE chat. Refuse instead.
+                    if (!_text) {
+                        var _emptyErr = new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: refusing to send an empty E2EE message (no body, no usable attachment).");
+                        _emptyErr.code = "EMPTY_MESSAGE";
+                        throw _emptyErr;
+                    }
+                    var _tRes = await _bridge.sendMessage(_e2eeJid, _text, _sendOpts);
                     _last = { threadID: threadID, messageID: _tRes && _tRes.messageId ? String(_tRes.messageId) : undefined, isE2EE: true };
                     if (_last.messageID) {
                         global._e2eeMessageMap = global._e2eeMessageMap || new Map();
@@ -415,6 +445,38 @@ module.exports = function (defaultFuncs, api, ctx) {
                 var timeoutResult = { threadID: threadID, messageID: null, ackTimeout: true };
                 if (typeof callback === "function") callback(null, timeoutResult);
                 return timeoutResult;
+            }
+
+            // An intentionally refused empty message must not be retried through
+            // the legacy API - that is what produced the empty / broken bubbles.
+            // Also avoid re-throwing here: the caller (sendMessage wrapper) already
+            // stopped typing indicators and will handle the error itself.
+            if (mqttErr && mqttErr.code === 'EMPTY_MESSAGE') {
+                log.warn("sendMessage", "Empty message refused (no body, no attachment/sticker/emoji/location).");
+                var emptyResult = { threadID: threadID, messageID: null, emptyMessage: true };
+                if (typeof callback === "function") callback(null, emptyResult);
+                return emptyResult;
+            }
+
+            // The legacy HTTP API cannot address an E2EE chat; re-sending an
+            // unencrypted message into an encrypted thread is what clients
+            // render as "This message isn't available on this app version." -
+            // surface the error instead of falling back.
+            //
+            // IMPORTANT: also treat a thread whose id already looks like an E2EE
+            // JID (contains "@") as E2EE even when the thread->jid cache hasn't
+            // been populated yet (e.g. the bot has not yet received any E2EE
+            // message from that chat).  Without this, the first reply to a brand-
+            // new E2EE thread would incorrectly fall back to the legacy HTTP API
+            // and produce the "isn't available on this app version" error.
+            var _e2eeCheck = require('../e2ee');
+            var _threadIDStr = String(threadID);
+            var _isE2EEThreadNow = _e2eeCheck.isE2EEChatJid(_threadIDStr)
+                || _e2eeCheck.getE2EEJidForThread(threadID);
+            if (_isE2EEThreadNow) {
+                log.warn("sendMessage", "MQTT send failed for an E2EE thread - not falling back to legacy HTTP.");
+                if (typeof callback === "function") callback(mqttErr);
+                throw mqttErr;
             }
 
             log.warn("sendMessage", "MQTT send failed, falling back to HTTP: " + (mqttErr && mqttErr.message));

@@ -4,6 +4,8 @@ var log    = require("npmlog");
 var path   = require("path");
 var urlMod = require("url");
 var http   = require("http");
+var https  = require("https");
+var fs     = require("fs");
 var crypto = require("crypto");
 var stream = require("stream");
 
@@ -55,6 +57,77 @@ async function storeMedia(buffer, mimeType) {
     expiry  : Date.now() + 10 * 60 * 1000
   });
   return "http://127.0.0.1:" + port + "/e2ee/" + id;
+}
+
+// Maps grow forever in a long-running bot process, so cap them (FIFO). The
+// E2EE id maps are only needed for "recent" messages (replies, reactions,
+// unsend), so 10000 entries is plenty and keeps memory bounded.
+var _MAP_CAP = 10000;
+function _mapSetCapped(map, key, value) {
+  if (map.has(key)) map.delete(key);       // re-insert to refresh LRU order
+  map.set(key, value);
+  if (map.size > _MAP_CAP) {
+    var oldest = map.keys().next().value;
+    map.delete(oldest);
+  }
+}
+
+var _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+var _MAX_REMOTE_BYTES = 50 * 1024 * 1024;
+
+// Resolve an attachment that is an http(s) URL or a local file path into a
+// Buffer. Anything else is treated as a base64 string (legacy behaviour).
+// Bots very commonly pass image URLs; without this they were base64-decoded
+// into garbage media that clients rendered as a broken/empty attachment.
+function fetchUrlAsBuffer(value) {
+  return new Promise(function (resolve, reject) {
+    if (typeof value !== "string") return resolve(null);
+    var str = value.trim();
+    if (/^https?:\/\//i.test(str)) {
+      var redirects = 0;
+      var get = function (u) {
+        var mod = /^https:/i.test(u) ? https : http;
+        var req = mod.get(u, { headers: { "User-Agent": _UA } }, function (res) {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            res.resume();
+            if (++redirects > 5) return reject(new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: too many redirects while fetching attachment " + u));
+            var next;
+            try { next = urlMod.resolve(u, res.headers.location); }
+            catch (_) { next = res.headers.location; }
+            return get(next);
+          }
+          if (res.statusCode !== 200) {
+            res.resume();
+            return reject(new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: HTTP " + res.statusCode + " while fetching attachment " + u));
+          }
+          var chunks = [], size = 0, done = false;
+          res.on("data", function (c) {
+            if (done) return;
+            size += c.length;
+            if (size > _MAX_REMOTE_BYTES) {
+              done = true;
+              req.destroy();
+              return reject(new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: attachment larger than 50MB - " + u));
+            }
+            chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+          });
+          res.on("end", function () { if (!done) { done = true; resolve(Buffer.concat(chunks)); } });
+          res.on("error", function (e) { if (!done) { done = true; reject(e); } });
+        });
+        req.on("error", function (e) { if (!done) reject(e); });
+        req.setTimeout(30000, function () {
+          req.destroy(new Error("𝐬𝐡𝐚𝐧-𝐟𝐜𝐚: timeout while fetching attachment " + u));
+        });
+      };
+      return get(str);
+    }
+    try {
+      if (fs.existsSync(str) && fs.statSync(str).isFile()) {
+        return resolve(fs.readFileSync(str));
+      }
+    } catch (_) { /* fall through to base64 */ }
+    return resolve(Buffer.from(str, "base64"));
+  });
 }
 
 var _dynamicImport = null;
@@ -341,17 +414,28 @@ function createBridge(ctx) {
       var mapped = _mapMsg(ev);
       global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
       global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
+      global._e2eeThreadMap    = global._e2eeThreadMap    || new Map();
       if (mapped.messageID && mapped.threadID) {
-        global._e2eeMessageMap.set(String(mapped.messageID), String(mapped.threadID));
-        if (ev.chatJid) global._e2eeMessageMap.set(String(mapped.messageID) + "_jid", String(ev.chatJid));
+        _mapSetCapped(global._e2eeMessageMap, String(mapped.messageID), String(mapped.threadID));
+        if (ev.chatJid) {
+          _mapSetCapped(global._e2eeMessageMap, String(mapped.messageID) + "_jid", String(ev.chatJid));
+          // thread-level map: numeric threadID -> chat jid. This is what lets
+          // the bot detect "this reply belongs to an E2EE chat" when the caller
+          // only has the numeric thread id (the old code looked message ids up
+          // as thread ids, so E2EE chats were almost never detected and replies
+          // went out through the legacy transport - rendered by clients as
+          // "This message isn't available on this app version.").
+          _mapSetCapped(global._e2eeThreadMap, String(mapped.threadID), String(ev.chatJid));
+        }
       }
       if (mapped.messageID && ev.senderJid)
-        global._e2eeSenderJidMap.set(String(mapped.messageID), String(ev.senderJid));
+        _mapSetCapped(global._e2eeSenderJidMap, String(mapped.messageID), String(ev.senderJid));
       if (ev.replyTo && ev.chatJid) {
         var _rtReg = ev.replyTo.messageId || ev.replyTo.id;
         if (_rtReg) {
-          global._e2eeMessageMap.set(String(_rtReg), _extractThreadID(ev.chatJid));
-          global._e2eeMessageMap.set(String(_rtReg) + "_jid", String(ev.chatJid));
+          _mapSetCapped(global._e2eeMessageMap, String(_rtReg), _extractThreadID(ev.chatJid));
+          _mapSetCapped(global._e2eeMessageMap, String(_rtReg) + "_jid", String(ev.chatJid));
+          _mapSetCapped(global._e2eeThreadMap, _extractThreadID(ev.chatJid), String(ev.chatJid));
         }
       }
       _callUserCallback(state.lastGlobalCallback, null, mapped);
@@ -517,12 +601,43 @@ function createBridge(ctx) {
 
 global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
 global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
+global._e2eeThreadMap    = global._e2eeThreadMap    || new Map();
 
 function _regMsg(msgID, jid) {
   if (msgID && jid) {
-    global._e2eeMessageMap.set(String(msgID), _extractThreadID(jid));
-    global._e2eeMessageMap.set(String(msgID) + "_jid", String(jid));
+    _mapSetCapped(global._e2eeMessageMap, String(msgID), _extractThreadID(jid));
+    _mapSetCapped(global._e2eeMessageMap, String(msgID) + "_jid", String(jid));
+    _mapSetCapped(global._e2eeThreadMap, _extractThreadID(jid), String(jid));
   }
+}
+
+// Resolve a numeric thread id (what the bot sees in event.threadID) to the
+// E2EE chat jid, so sends route through the E2EE bridge instead of the legacy
+// transport. Returns null for non-E2EE threads.
+function getE2EEJidForThread(threadID) {
+  if (!threadID) return null;
+  var key = String(threadID);
+  var tm = global._e2eeThreadMap;
+  if (tm && tm.has(key)) {
+    var jid = tm.get(key);
+    if (isE2EEChatJid(jid)) return jid;
+  }
+  var mm = global._e2eeMessageMap;
+  if (mm) {
+    var direct = mm.get(key + "_jid");
+    if (isE2EEChatJid(direct)) return direct;
+    // last resort: some message id in the chat maps to this thread
+    var found = null;
+    mm.forEach(function (mappedThread, msgKey) {
+      if (found) return;
+      if (String(msgKey).indexOf("_jid") === -1 && String(mappedThread) === key) {
+        var j = mm.get(String(msgKey) + "_jid");
+        if (isE2EEChatJid(j)) found = j;
+      }
+    });
+    if (found) return found;
+  }
+  return null;
 }
 
 var _EXT_MIME = {
@@ -587,7 +702,7 @@ function patchApiForE2EE(api, ctx) {
         var rawType = att.type === "photo" ? "image" : (att.type || "image");
         var res = await api.downloadE2EEMedia({
           directPath: att.directPath, mediaKey: att.mediaKey,
-          mediaSh4n: att.mediaSh4n, mediaEncSh4n: att.mediaEncSh4n || undefined,
+                    mediaSha256: att.mediaSha256, mediaEncSha256: att.mediaEncSha256 || undefined,
           mediaType: rawType, mimeType: att.mimeType, fileSize: Number(att.fileSize)
         });
         var localUrl = await storeMedia(res.data, res.mimeType || att.mimeType || "image/jpeg");
@@ -609,11 +724,14 @@ function patchApiForE2EE(api, ctx) {
   if (typeof api.isE2EEChat !== "function") {
     api.isE2EEChat = function(threadID) {
       if (!threadID) return false;
-      return global._e2eeMessageMap && (
-        global._e2eeMessageMap.has(String(threadID)) ||
-        global._e2eeMessageMap.has(String(threadID) + "_jid")
-      );
+      return getE2EEJidForThread(threadID) != null;
     };
+  }
+
+  // Expose the thread -> jid resolver so sendMessage can route E2EE replies
+  // through the bridge even when the caller only has the numeric thread id.
+  if (typeof api.getE2EEJidForThread !== "function") {
+    api.getE2EEJidForThread = getE2EEJidForThread;
   }
 }
 
@@ -621,6 +739,8 @@ module.exports = {
   isE2EEChatJid         : isE2EEChatJid,
   isE2EEUnavailableError: isE2EEUnavailableError,
   storeMedia            : storeMedia,
+  fetchUrlAsBuffer      : fetchUrlAsBuffer,
+  getE2EEJidForThread   : getE2EEJidForThread,
   createBridge          : createBridge,
   patchApiForE2EE       : patchApiForE2EE,
   _extractThreadID      : _extractThreadID
